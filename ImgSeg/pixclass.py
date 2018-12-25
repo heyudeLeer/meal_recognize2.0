@@ -72,6 +72,8 @@ class DataInfo:
         self.val_datas = None
         self.model = None
         self.val_2Dlabel=None
+        self.object_pixels_avg = []
+        self.object_area_avg = []
 
     def para_init(self, pixel_level=0):
 
@@ -124,6 +126,8 @@ class PredictInfo:
         self.class_name_dic_t = None
         self.model = None
         self.train_img_num = 0
+        self.object_pixels_avg = []
+        self.object_area_avg = []
 
 
 def saveStruct(*struct_datas):
@@ -135,6 +139,13 @@ def saveStruct(*struct_datas):
         np.save(datas.name + "class_num", datas.class_num)
         np.save(datas.name + "class_name_dic_t", dict(datas.class_name_dic_t))
         np.save(datas.name + "train_img_num", datas.train_img_num)
+        np.save(datas.name + "object_pixels_avg", datas.object_pixels_avg)
+        np.save(datas.name + "object_area_avg", datas.object_area_avg)
+        print 'object_area_avg'
+        print datas.object_area_avg
+        print 'object_pixels_avg'
+        print datas.object_pixels_avg
+
         print(datas.name + " info have saved!--------------")
 
 
@@ -149,6 +160,14 @@ def loadStruct(*struct_datas):
         dict_array = np.load(datas.name + "class_name_dic_t.npy")
         datas.class_name_dic_t = dict_array.item()                ##### key point
         datas.train_img_num = np.load(datas.name + "train_img_num.npy")
+        datas.object_pixels_avg = np.load(datas.name + "object_pixels_avg.npy")
+        datas.object_area_avg = np.load(datas.name + "object_area_avg.npy")
+
+        print 'object_area_avg'
+        print datas.object_area_avg
+        print 'object_pixels_avg'
+        print datas.object_pixels_avg
+
         print(datas.name + "* have loaded...!")
 
 
@@ -202,7 +221,6 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
         dataInfo.model = train.train_model_by_predict(data_set_path=data_set_path,
                                                   data_info=dataInfo)  # save model weights on disk
 
-
     # get predict info
     predicInfo = PredictInfo()
     predicInfo.IMG_ROW = dataInfo.IMG_ROW
@@ -211,8 +229,12 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
     predicInfo.IMG_COL_OUT = dataInfo.IMG_COL_OUT
     predicInfo.class_num = dataInfo.class_num
     predicInfo.class_name_dic_t = dataInfo.class_name_dic_t
-    predicInfo.model =  dataInfo.model
+    predicInfo.model = dataInfo.model
     predicInfo.train_img_num = dataInfo.train_img_num
+
+    predic.getPerPixels(setsPath=data_set_path + '/train', data_info=dataInfo)
+    predicInfo.object_pixels_avg = dataInfo.object_pixels_avg
+    predicInfo.object_area_avg = dataInfo.object_area_avg
 
     predicInfo.name = path
     saveStruct(predicInfo, )
@@ -230,7 +252,7 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
 
 
 # Once the model is created, you can test it with the following api
-def cold_predict_img(data_set_path="/path/to/data_set/restaurant_name", image_url='path/to/image',pixel_level=0):
+def cold_predict_img(data_set_path="/path/to/data_set/restaurant_name", image_url='path/to/image',pixel_level=0,check=False):
     '''
     :param data_set_path:
     :param image_url:
@@ -259,13 +281,13 @@ def cold_predict_img(data_set_path="/path/to/data_set/restaurant_name", image_ur
     #print type(model)
 
 
-    dic = predic.segImgfile_web(data_info= predicInfo, url=image_url,out_path=data_set_path) # save pcla.jpg in data_set_path/predictImg
+    dic = predic.segImgfile_web(data_info= predicInfo, url=image_url,out_path=data_set_path,show=check) # save pcla.jpg in data_set_path/predictImg
     #ret = predic.segImgDir(seg_model=model, data_info= predicInfo, segPath='/home/heyude/temp/seg')
 
     return dic, predicInfo  # recognition_info
 
 
-def hot_predict_img(data_set_path="/path/to/data_set/restaurant_name", image_url='path/to/image',predict_info=None):
+def hot_predict_img(data_set_path="/path/to/data_set/restaurant_name", image_url='path/to/image',predict_info=None,check=False):
 
     # load model on disk by name
     #model = predict_info.model
@@ -286,7 +308,7 @@ def hot_predict_img(data_set_path="/path/to/data_set/restaurant_name", image_url
     #print "class_num:" + str(predict_info.class_num)
     #print predict_info.class_name_dic_t
 
-    dic = predic.segImgfile_web(data_info=predict_info, url=image_url, out_path=data_set_path,show=True)
+    dic = predic.segImgfile_web(data_info=predict_info, url=image_url, out_path=data_set_path,show=check)
     # ret = predic.segImgDir(seg_model=model, data_info= predic_info, segPath='/home/heyude/temp/seg')
 
     return dic  # recognition_info

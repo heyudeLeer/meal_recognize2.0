@@ -17,6 +17,7 @@ import data_label
 import train
 from keras.layers import Input, Activation
 from keras.models import Model
+import CVision.opencv_tools as cv_tools
 
 print 'in predic'
 
@@ -120,7 +121,7 @@ def getRgbImgFromUpsampling(imgP=None, data_info=None, check=False,coordinate=Fa
         #print dot
         if dot < judgeInfo.pixel_min_num:   #remove pixel过小的
             myset.remove(index)
-            print 'remove '+name
+            print 'Rgb remove '+name
         #else:
         #    print index, dot
     #print myset
@@ -189,33 +190,128 @@ def getRgbImgFromUpsampling(imgP=None, data_info=None, check=False,coordinate=Fa
     for item in myset:
         name = data_info.class_name_dic_t.get(item)  # item is dish index; key is dish name
         dot = mylist.count(item)  # value is dishes dot nums
-        object_rate = dot * 1.0 / object_pixel_sum
-        if object_rate > judgeInfo.object_min_rate: # 再次去掉面积过小的
-            dishes_dictory[name] = object_rate
-    # print dishes_dictory
+        object_num = dot * 1.125 / data_info.object_pixels_avg[item] # 1.125 泛化修正因子
 
-        '''
-        # get coordinate
-        xl, yl, xr, yr = 0, 0, 0, 0
-        if coordinate:
-            i_list = []
-            j_list = []
-            for i in range(data_info.IMG_ROW_OUT):
-                for j in range(data_info.IMG_COL_OUT):
-                    if rgbImg[i, j, 0] == targetColor[item][0] and \
-                                    rgbImg[i, j, 1] == targetColor[item][1] and \
-                                    rgbImg[i, j, 2] == targetColor[item][2]:
-                        i_list.append(i)
-                        j_list.append(j)
-            xl = min(j_list)
-            yl = min(i_list)
-            xr = max(j_list)
-            yr = max(i_list)
+        #object_num = round(object_num)
+        if object_num > judgeInfo.object_min_rate :
+            #dishes_dictory[name] = np.uint32(object_num)
+            dishes_dictory[name] = object_num
 
-        #dishes_dictory[key] = (dot, name, (xl, yl, xr, yr))
-        '''
+    '''
+    # get coordinate
+    xl, yl, xr, yr = 0, 0, 0, 0
+    if coordinate:
+        i_list = []
+        j_list = []
+        for i in range(data_info.IMG_ROW_OUT):
+            for j in range(data_info.IMG_COL_OUT):
+                if rgbImg[i, j, 0] == targetColor[item][0] and \
+                                rgbImg[i, j, 1] == targetColor[item][1] and \
+                                rgbImg[i, j, 2] == targetColor[item][2]:
+                    i_list.append(i)
+                    j_list.append(j)
+        xl = min(j_list)
+        yl = min(i_list)
+        xr = max(j_list)
+        yr = max(i_list)
+
+    #dishes_dictory[key] = (dot, name, (xl, yl, xr, yr))
+    '''
 
     return rgbImg, dishes_dictory
+
+
+# predict
+def getDishesByPixels_pass(pixelList=None,dataInfo=None,segImg=None):
+    judgeInfo = JudgeInfo()
+    dishes_dictory = {}
+    canvas_l=[]
+
+    myset = set(pixelList)  # myset是另外一个列表，里面的内容是mylist里面的无重复项
+    # print myset
+    # 删除势力弱的object
+    for item in myset:
+        object_num = 0
+        dot = pixelList.count(item)  # value is dishes dot nums
+        object_rate = dot * 1.125 / dataInfo.object_pixels_avg[item]  # 1.125 泛化修正因子
+        name = dataInfo.class_name_dic_t.get(item)  # item is dish index; key is dish name
+        if object_rate < judgeInfo.object_min_rate:  # remove pixel过小的
+            #myset.remove(item)
+            print 'remove ' + name
+            continue
+        else:
+            print segImg.shape
+            areas,canvas = cv_tools.getAreaOneDimension(img=segImg[:,:,item], th=1.0/dataInfo.class_num)
+            canvas_l.append(canvas)
+            for area in areas:
+                if area / dataInfo.object_area_avg[item] > judgeInfo.object_min_rate * 0.2:
+                    object_num += 1
+                    print 'get int'
+
+        if object_num == 1 and object_rate > 1.0:
+            object_num = round(object_rate)
+            print 'get round'
+
+        dishes_dictory[name] = object_num
+
+    return dishes_dictory,canvas_l
+
+
+def getDishesBySegImg(dataInfo=None,segImg=None,drawCnt=0):
+    '''
+    :param dataInfo:
+    :param segImg:
+    :param drawCnt: 0:no draw cnt; 1:1by1; 2:all cnt in one canvas
+    :return:
+    '''
+
+    judgeInfo = JudgeInfo()
+    dishes_dictory = {}
+
+    canvas = None
+    canvas_l = []
+    x, y, _ = segImg.shape
+    if drawCnt > 0:
+        canvas = np.zeros((x, y), dtype=np.uint8)
+
+    for item in range(dataInfo.class_num):
+
+        areas,canvas = cv_tools.getAreaOneDimension(img=segImg[:,:,item], th=1.0/dataInfo.class_num,canvas=canvas)
+        if areas is None:
+            if drawCnt == 1:
+                canvas_l.append(canvas)
+                canvas = np.zeros((x, y), dtype=np.uint8)
+            continue
+
+        object_num = 0
+        name = dataInfo.class_name_dic_t.get(item)  # item is dish index; key is dish name
+
+        print
+        print name +'_avg: '+ str(dataInfo.object_area_avg[item])
+        print areas
+
+        for area in areas:
+            object_rate = area / dataInfo.object_area_avg[item]
+
+            if object_rate > judgeInfo.object_min_rate:
+                object_num += 1
+                print 'get int '+ str(area) + ':' + str(object_rate)
+
+        if object_num == 1 and object_rate > 1.0:
+            object_num = round(object_rate)
+            print 'get round ' + str(object_rate) +":"+str(object_num)
+
+        if object_num > 0:
+            dishes_dictory[name] = object_num
+
+        if drawCnt == 1:
+            canvas_l.append(canvas)
+            canvas = np.zeros((x, y), dtype=np.uint8)
+
+    if drawCnt == 1:
+        return dishes_dictory,canvas_l
+    else:
+        return dishes_dictory,canvas
 
 
 def imgPredict2DShow(url=None,predict_info=None):
@@ -297,38 +393,65 @@ def imgPredict2DShow_diff(url=None,predict_info=None):
     plt.show()
 
 
-def segImgfile_web(data_info= None, url=None,out_path=None, show=True):
+def segImgfile_web(data_info= None, url=None,out_path=None, show=False):
     '''
     image segmentation
     :param file: image path
     :return: print and plt show result
     '''
+    drawCnt = 0
     dic_ret = {}
     print ('predict  ' + url)
 
     t0 = time.time()
-    img = data_label.loadImage(url=url,data_info=data_info)
-    y_p, pred = data_info.model.predict(img)
+    img = data_label.loadImage(url=url,data_info=data_info) #113ms
+    y_p, pred = data_info.model.predict(img)  #70ms
     #print pred.shape()
-    segImg,dishes_info = getRgbImgFromUpsampling(imgP=pred, data_info=data_info)
+    if show is True:
+        RgbImg,dishes_info = getRgbImgFromUpsampling(imgP=pred, data_info=data_info)  #310ms
+        drawCnt = 1
+
+    dishes_info, canvas_l = getDishesBySegImg(dataInfo=data_info, segImg=pred[0],drawCnt=drawCnt)       #2ms
+
     t1 = time.time()
     dic_ret = dishes_info
     dic_ret['usetime'] = t1 - t0
 
     if show is True:
-        plt.figure(figsize=(6, 8))
+
+        n = 3
+        m  = data_info.class_num + 1
+        plt.figure(figsize=(20, 8))
         # display source img
-        ax = plt.subplot(2, 1, 1)
+        ax = plt.subplot(n, m, 1)
         ax.imshow(img[0]/255.)
         ax.set_title(os.path.basename(url))
-        # ax.get_xaxis().set_visible(False)
-        ax.get_yaxis().set_visible(False)
+        ax.get_xaxis().set_visible(False)
+        #ax.get_yaxis().set_visible(False)
 
-        ax = plt.subplot(2, 1, 2)
+        ax = plt.subplot(n, m, 2)
         # display result
-        ax.imshow(segImg)
-        #ax.get_xaxis().set_visible(False)
-        ax.get_yaxis().set_visible(False)
+        ax.imshow(RgbImg)
+        ax.get_xaxis().set_visible(False)
+        #ax.get_yaxis().set_visible(False)
+
+        for i in range(data_info.class_num):
+            ax = plt.subplot(n, m, m+1 + i)
+            ax.set_title(data_info.class_name_dic_t.get(i))
+            ax.get_xaxis().set_visible(False)
+            ax.imshow(canvas_l[i]/255.)
+
+        for i in range(data_info.class_num - 1):
+            canvas_l[0] += canvas_l[i + 1]
+        ax = plt.subplot(n, m, 3)
+        ax.imshow(canvas_l[0]/255.)
+        ax.get_xaxis().set_visible(False)
+
+        for i in range(data_info.class_num):
+            ax = plt.subplot(n, m, m*2+1 + i)
+            ax.set_title(str(dishes_info.get(data_info.class_name_dic_t.get(i))))
+            ax.get_xaxis().set_visible(False)
+            ax.imshow(pred[0,:,:,i]/255.)
 
         pixel_name = os.path.basename(url)
         #pixel_name = pixel_name[0:-4]
@@ -431,12 +554,14 @@ def segImgDir_cantai(PredictInfo=None, segPath=None, plca_path=None):
         if cmp(file, "category.txt") == 0:
             continue
 
+        print
         print ('predict  '+file)
         img = data_label.loadImage(url=segPath + '/' + file,data_info=PredictInfo)
         y_p, pred = PredictInfo.model.predict(img)
         #print pred[0].shape
         #print pred[1].shape
-        segImg,dishes_info = getRgbImgFromUpsampling(imgP=pred, data_info=PredictInfo)
+        RgbImg,dishes_info = getRgbImgFromUpsampling(imgP=pred, data_info=PredictInfo)
+        dishes_info, canvas = getDishesBySegImg(dataInfo=PredictInfo, segImg=pred[0],drawCnt=2)
 
         i += 1
         # display source img
@@ -466,7 +591,7 @@ def segImgDir_cantai(PredictInfo=None, segPath=None, plca_path=None):
                 #ax.text(xl, central_y, dish_v[1].decode('utf8'), size=8, color="r", fontproperties=zhfont1)
 
         # display result
-        ax.imshow(segImg)
+        ax.imshow(RgbImg)
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
 
@@ -476,7 +601,7 @@ def segImgDir_cantai(PredictInfo=None, segPath=None, plca_path=None):
         #img = data_label.loadImage(url=plca_path + '/' + shotname+'_pcla.jpg',data_info=PredictInfo)
         ax = plt.subplot(3, n, i+n*2)
         ax.set_title(shotname[-4:-1])
-        plt.imshow(img[0]/255.)
+        plt.imshow(canvas/255.)
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
 
@@ -485,6 +610,80 @@ def segImgDir_cantai(PredictInfo=None, segPath=None, plca_path=None):
             cv2.waitKey()
             plt.figure(figsize=(20, 5))
             i = 0
+
+
+def getPredPixels(imgP=None, data_info=None):
+
+    avg_p = 1.0 / data_info.class_num
+    object_pixel_sum = 0
+
+    for i in range(data_info.IMG_ROW_OUT):
+        for j in range(data_info.IMG_COL_OUT):
+            a = imgP[0, i, j, :]
+            if data_info.class_num == 2:
+                median_x = min(a)
+            else:
+                median_x = np.median(a)
+
+            max_index = a.argmax()
+            object = imgP[0, i, j, max_index]
+
+            if median_x < avg_p/2 and object > 0.6:
+                object_pixel_sum += 1
+
+    return object_pixel_sum
+
+
+# train
+def getPerPixels(setsPath=None, data_info=None):
+
+    objects = data_info.class_num
+    for item in range(objects):
+        dirName = data_info.class_name_dic_t.get(item)  # item is dish index; key is dish name
+        if dirName == 'bg':  # 抑制背景，效果还不错，也够简单
+            continue
+
+        for _, _, files in os.walk(setsPath + '/' + dirName):
+            break
+
+        dot_sum = 0
+        area_sum = 0
+        for name in files:
+            if cmp(file, "category.txt") == 0:
+                continue
+            url = setsPath + '/' + dirName + '/' + name
+            print ('predict ' + url)
+
+            img = data_label.loadImage(url=url,data_info=data_info)
+            y_p,preds = data_info.model.predict(img)
+
+            dot = getPredPixels(imgP=preds, data_info=data_info)
+            dot_sum  += dot
+            print dot
+            img = preds[0,:,:,item]
+            areas,_ = cv_tools.getAreaOneDimension(img=img,th=1.0/data_info.class_num)
+            if len(areas) != 1:
+                print
+                print 'warning!!!!! get Contours err on predict train sets...'
+                print 'warning!!!!! get Contours err on predict train sets...'
+                print 'warning!!!!! get Contours err on predict train sets...'
+                print
+            area_sum += areas[0]
+            print areas[0]
+
+        pixel_avg = dot_sum * 1.0 / len(files)
+        area_avg = area_sum * 1.0 / len(files)
+
+        pixel_avg = round(pixel_avg,2)
+        area_avg = round(area_avg,2)
+
+        data_info.object_pixels_avg.append(pixel_avg)
+        data_info.object_area_avg.append(area_avg)
+
+        print 'data_info.object_pixels_avg:'
+        print data_info.object_pixels_avg
+        print 'data_info.object_area_avg:'
+        print data_info.object_area_avg
 
 
 def CalcAccuracySegDir(PredictInfo=None,setsPath=None,top=3,verbose=1,data_set_path=None):
@@ -715,15 +914,14 @@ def locateImgfile(url):
     cv2.destroyAllWindows()
 
 
-def predictImage(url):
-    img = loadImage(url)
+def predictImage(model=None,url=None):
+    img = data_label.loadImage(url)
 
-    if segModel == None :
-        print 'please creatModel 1st'
-        print 'use to2D_train.creatModel() function'
+    if model == None :
+        print 'please creatModel...'
         return
 
-    preds = segModel.predict(img)
+    preds = model.predict(img)
     return preds
 
 

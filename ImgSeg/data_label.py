@@ -209,7 +209,7 @@ def enhance_by_random(x=None, data_info=None,if_save=False ):
     return x
 
 
-def loadImage(url=None, gray=False, use_cv2=False,data_info=None):
+def loadImage(url=None, use_cv2=True,data_info=None):
 
     if use_cv2 is False:
         img = image.load_img(url)#,target_size=(data_info.IMG_ROW,data_info.IMG_COL))

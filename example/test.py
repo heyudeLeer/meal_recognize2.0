@@ -45,6 +45,26 @@ def hot_test(restaurant_path=None,img_url=None,model_info=None):
     predic.imgPredict2DShow(url=img_url, predict_info=model_info)
 
 
+def test_hot_predict_by_dir(segPath=None,restaurant_path=None,model_info=None):
+    print segPath
+    for _, _, files in os.walk(segPath):
+        print ("coming " + segPath)
+        break
+    n = len(files)
+    print 'files num is ' + str(n)
+
+    for file in files:
+
+        if cmp(file, "category.txt") == 0:
+            continue
+        img_url = segPath + '/' + file
+        ret = pixclass.hot_predict_img(data_set_path=restaurant_path,
+                                       image_url=img_url,
+                                       predict_info=model_info)
+        print(ret)
+        print
+
+
 if __name__ == '__main__':
 
     restaurant_path = 'data_set/gpu_model/model'
@@ -78,11 +98,12 @@ if __name__ == '__main__':
     #data_label.pre_data_set(data_set_path=restaurant_path) #only one time for every data_set
     nowTime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 现在
     print nowTime
-    #model_info=train(restaurant_path=restaurant_path)
+    model_info=train(restaurant_path=restaurant_path)
     nowTime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 现在
     print nowTime
-    model_info=predict(restaurant_path=restaurant_path,img_url=img_url1)
-    #hot_test(restaurant_path=restaurant_path, img_url=img_url2, model_info=model_info)
+    model_info=predict(restaurant_path=restaurant_path,img_url=img_url3)
+    #hot_test(restaurant_path=restaurant_path, img_url=img_url4, model_info=model_info)
+    test_hot_predict_by_dir(restaurant_path=restaurant_path, segPath=restaurant_path + '/predictImg/img/pingpan_hot_test', model_info=model_info)
 
 
     #predic.imgPredict2DShow_diff(url=[img_url1,img_url2], predict_info=model_info)
@@ -94,9 +115,9 @@ if __name__ == '__main__':
 
     #hot_test(restaurant_path=restaurant_path, img_url=img_url, model_info=model_info)
     #predic.segImgDir_cantai(PredictInfo=model_info, segPath=restaurant_path + '/predictImg/img/sample',plca_path=restaurant_path + '/predictImg/pcla')
-    predic.segImgDir_cantai(PredictInfo=model_info, segPath=restaurant_path + '/predictImg/img/single',plca_path=restaurant_path + '/predictImg/pcla')
-    #predic.segImgDir_cantai(PredictInfo=model_info, segPath=restaurant_path + '/predictImg/img/pingpan_s',plca_path=restaurant_path + '/predictImg/pcla')
-    predic.segImgDir_cantai(PredictInfo=model_info, segPath=restaurant_path + '/predictImg/img/pingpan',plca_path=restaurant_path + '/predictImg/pcla')
+    #predic.segImgDir_cantai(PredictInfo=model_info, segPath=restaurant_path + '/predictImg/img/Baicaidunrou',plca_path=restaurant_path + '/predictImg/pcla')
+    predic.segImgDir_cantai(PredictInfo=model_info, segPath=restaurant_path + '/predictImg/img/pingpan_s',plca_path=restaurant_path + '/predictImg/pcla')
+    #predic.segImgDir_cantai(PredictInfo=model_info, segPath=restaurant_path + '/predictImg/img/pingpan',plca_path=restaurant_path + '/predictImg/pcla')
 
 
 

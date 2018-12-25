@@ -122,7 +122,6 @@ def train_model(data_set_path=None, data_info=None, boost=True, toBool=False):
         model.load_weights(filepath=weight_file)
         data_label.one_hot_self_check(model=model, data_info=data_info, extend=5, thickness=1e-5)
 
-
     if boost is True:
         ### froze cnn ,and re train
         for layer in model.layers[:]:

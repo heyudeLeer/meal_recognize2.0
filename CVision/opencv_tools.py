@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+import matplotlib.pyplot as plt
 import cv2
 import numpy as np
 
@@ -265,6 +266,64 @@ def objectBoolean(img=None):
     cv2.drawContours(image=canvas, contours=cm, contourIdx=-1, color=(255,255,255), thickness=-1)
     #cv2.imshow("allBip", canvas)
     return canvas
+
+
+def getAreaOneDimension(img=None,th=127,canvas=None,check=False):
+    areas=None
+
+    #print(type(img),img.dtype, np.min(img), np.max(img))
+
+    # 边缘检测
+    #edges = cv2.Canny(img, 100, 50)
+    #blurredSrc = cv2.medianBlur(img, 5)
+    #cv2.Laplacian(blurredSrc, cv2.CV_8U, blurredSrc, ksize=5)
+    #edges = blurredSrc
+
+    edges = np.uint8(img * 255)
+
+    # get轮廓
+    ret, thresh = cv2.threshold(edges, th*512, 255, cv2.THRESH_BINARY)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)  # cv2.RETR_EXTERNAL RETR_LIST #thresh.copy()
+
+    if len(contours) == 0:
+        return areas, canvas
+
+    #print "find "+str(len(contours)) + " contours!"
+    # 获取面积
+    areas = []
+    for contour in contours:
+        #contour = cv2.convexHull(contour)
+
+        area = cv2.contourArea(contour)
+        area = round( area*1.1, 2)  #1.1修正粒度误差
+        areas.append(area)
+
+        if canvas is not None:
+            cv2.drawContours(image=canvas, contours=[contour], contourIdx=-1, color=255, thickness=1)
+
+    if check is True:
+        n = 4
+        plt.figure(figsize=(20, 5))
+
+        ax = plt.subplot(1, n, 1)
+        ax.set_title('segImg')
+        ax.imshow(img)
+
+        ax = plt.subplot(1, n, 2)
+        ax.set_title('edges')
+        ax.imshow(edges)
+
+        ax = plt.subplot(1, n, 3)
+        ax.set_title('thresh')
+        ax.imshow(thresh)
+
+        ax = plt.subplot(1, n, 4)
+        ax.set_title('canvas')
+        ax.imshow(canvas)
+
+        plt.show()
+
+    return areas,canvas
 
 
 print 'out opencv_tools'
