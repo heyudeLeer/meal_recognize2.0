@@ -26,7 +26,7 @@ print 'in predic'
 class JudgeInfo:
     def __init__(self):
 
-        self.object_min_rate = 0.1  # area rate
+        self.object_min_rate = 0.2  # area rate
         self.pixel_min_num = 8
         #self.degreeCorrectTh = 0.2  # fullness
 
@@ -222,41 +222,6 @@ def getRgbImgFromUpsampling(imgP=None, data_info=None, check=False,coordinate=Fa
 
 
 # predict
-def getDishesByPixels_pass(pixelList=None,dataInfo=None,segImg=None):
-    judgeInfo = JudgeInfo()
-    dishes_dictory = {}
-    canvas_l=[]
-
-    myset = set(pixelList)  # myset是另外一个列表，里面的内容是mylist里面的无重复项
-    # print myset
-    # 删除势力弱的object
-    for item in myset:
-        object_num = 0
-        dot = pixelList.count(item)  # value is dishes dot nums
-        object_rate = dot * 1.125 / dataInfo.object_pixels_avg[item]  # 1.125 泛化修正因子
-        name = dataInfo.class_name_dic_t.get(item)  # item is dish index; key is dish name
-        if object_rate < judgeInfo.object_min_rate:  # remove pixel过小的
-            #myset.remove(item)
-            print 'remove ' + name
-            continue
-        else:
-            print segImg.shape
-            areas,canvas = cv_tools.getAreaOneDimension(img=segImg[:,:,item], th=1.0/dataInfo.class_num)
-            canvas_l.append(canvas)
-            for area in areas:
-                if area / dataInfo.object_area_avg[item] > judgeInfo.object_min_rate * 0.2:
-                    object_num += 1
-                    print 'get int'
-
-        if object_num == 1 and object_rate > 1.0:
-            object_num = round(object_rate)
-            print 'get round'
-
-        dishes_dictory[name] = object_num
-
-    return dishes_dictory,canvas_l
-
-
 def getDishesBySegImg(dataInfo=None,segImg=None,drawCnt=0):
     '''
     :param dataInfo:
@@ -276,7 +241,7 @@ def getDishesBySegImg(dataInfo=None,segImg=None,drawCnt=0):
 
     for item in range(dataInfo.class_num):
 
-        areas,canvas = cv_tools.getAreaOneDimension(img=segImg[:,:,item], th=1.0/dataInfo.class_num,canvas=canvas)
+        areas,canvas = cv_tools.getAreaOneDimension(img=segImg[:,:,item], th=dataInfo.threshold_value,canvas=canvas)
         if areas is None:
             if drawCnt == 1:
                 canvas_l.append(canvas)
@@ -661,7 +626,7 @@ def getPerPixels(setsPath=None, data_info=None):
             dot_sum  += dot
             print dot
             img = preds[0,:,:,item]
-            areas,_ = cv_tools.getAreaOneDimension(img=img,th=1.0/data_info.class_num)
+            areas,_ = cv_tools.getAreaOneDimension(img=img,th=data_info.threshold_value)
             if len(areas) != 1:
                 print
                 print 'warning!!!!! get Contours err on predict train sets...'

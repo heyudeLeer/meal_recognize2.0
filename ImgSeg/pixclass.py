@@ -74,6 +74,7 @@ class DataInfo:
         self.val_2Dlabel=None
         self.object_pixels_avg = []
         self.object_area_avg = []
+        self.threshold_value=131
 
     def para_init(self, pixel_level=0):
 
@@ -128,6 +129,7 @@ class PredictInfo:
         self.train_img_num = 0
         self.object_pixels_avg = []
         self.object_area_avg = []
+        self.threshold_value=131
 
 
 def saveStruct(*struct_datas):
@@ -171,6 +173,13 @@ def loadStruct(*struct_datas):
         print(datas.name + "* have loaded...!")
 
 
+def getThredholdValue(data_info=None): # multi: 1.2-->2.2
+    th = 1.0 / data_info.class_num
+    y = 2.2 - 2 * th  # ( [0.5,1.2] [0.1,2.0],[0.0000001,2.2])
+    th = round(th * y * 255)
+    data_info.threshold_value = np.uint8(th)
+
+
 def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level=0):
     '''
     :param data_set_path:
@@ -185,6 +194,7 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
     dataInfo.para_init(pixel_level=pixel_level)
     # get class_num/class_name/img_num/data_gen and so on by path_data_set
     data_label.get_data_info(data_set_path=data_set_path, data_info=dataInfo)
+    getThredholdValue(dataInfo)
 
     # save predict info in the data_set_path
     path = data_set_path + '/predictInfo/pixel_level'+ str(pixel_level)+ '/'
@@ -270,6 +280,8 @@ def cold_predict_img(data_set_path="/path/to/data_set/restaurant_name", image_ur
     predicInfo.name = data_set_path + '/predictInfo/pixel_level'+ str(pixel_level)+'/'
     loadStruct(predicInfo)
     predicInfo.model = model
+    getThredholdValue(predicInfo)
+
 
     #print "IMG_ROW:" + str(predicInfo.IMG_ROW)
     #print "IMG_COL:" + str(predicInfo.IMG_COL)

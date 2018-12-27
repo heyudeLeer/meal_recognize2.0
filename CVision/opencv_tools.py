@@ -268,7 +268,7 @@ def objectBoolean(img=None):
     return canvas
 
 
-def getAreaOneDimension(img=None,th=127,canvas=None,check=False):
+def getAreaOneDimension(img=None,th=131,canvas=None,check=False):
     areas=None
 
     #print(type(img),img.dtype, np.min(img), np.max(img))
@@ -282,7 +282,7 @@ def getAreaOneDimension(img=None,th=127,canvas=None,check=False):
     edges = np.uint8(img * 255)
 
     # get轮廓
-    ret, thresh = cv2.threshold(edges, th*512, 255, cv2.THRESH_BINARY)
+    ret, thresh = cv2.threshold(edges, th, 255, cv2.THRESH_BINARY)
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)  # cv2.RETR_EXTERNAL RETR_LIST #thresh.copy()
 
     if len(contours) == 0:
