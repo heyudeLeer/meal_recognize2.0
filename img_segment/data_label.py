@@ -45,10 +45,11 @@ def get_session(gpu_fraction=0.8):
 #KTF.set_session(get_session(0.8))
 
 
-def pre_data_set(data_set_path=None):
+def pre_data_set(data_set_path=None,project_path=None):
 
     ### split data set to train and validation
-    project_path = os.path.abspath('.')  # 获得当前工作目录
+    if project_path is None:
+        project_path = os.path.abspath('.')  # 获得当前工作目录
     split_tool = project_path + '/tools/split.sh'
     os.system("cp %s %s " % (split_tool,data_set_path))  # cp split.sh to data_set_path
     lib_name  = os.path.basename(data_set_path)
