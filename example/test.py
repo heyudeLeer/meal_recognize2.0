@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 import os
 import datetime
-from ImgSeg import pixclass
-from ImgSeg import predic
-from ImgSeg import data_label
+from img_segment import pixclass
+from img_segment import predic
+from img_segment import data_label
 
 
 def train(restaurant_path=None):

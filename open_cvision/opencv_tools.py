@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
+print 'in opencv_tools'
+
 import os
 import matplotlib.pyplot as plt
 import cv2
 import numpy as np
 
-print 'in opencv_tools'
 
 # 1st ,getContours
 def getContours(img):

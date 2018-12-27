@@ -1,5 +1,6 @@
 
 # encoding: utf-8
+print 'in train'
 
 import os
 import datetime
@@ -16,7 +17,6 @@ from keras import backend as K
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 import data_label
 
-print 'in train'
 
 
 def categorical_crossentropy(y_true, y_pred):

@@ -1,5 +1,7 @@
 
 # encoding: utf-8
+print 'in data_label'
+
 
 import os
 from PIL import ImageFile
@@ -28,9 +30,6 @@ import cv2
 from keras import backend as K
 from keras.preprocessing import image
 import random
-import train
-
-print 'in data_label'
 
 
 def get_session(gpu_fraction=0.8):
@@ -258,8 +257,8 @@ def mean_CCE_loss(y_true=0, y_pred=0,data_info=None):
     return ret
 
 
-# by openCV tools
-def train_generator_with2Dlabel(data_info=None, pure_2d=False): #by openCV tools
+# by open_cvision tools
+def train_generator_with2Dlabel(data_info=None, pure_2d=False): #by open_cvision tools
 
     for x, y in data_info.train_generator:
 

@@ -1,5 +1,6 @@
 
 # encoding: utf-8
+print 'in predic'
 
 import os
 import time
@@ -17,9 +18,8 @@ import data_label
 import train
 from keras.layers import Input, Activation
 from keras.models import Model
-import CVision.opencv_tools as cv_tools
+from .. open_cvision import opencv_tools as cv_tools
 
-print 'in predic'
 
 #zhfont1 = matplotlib.font_manager.FontProperties(fname='/usr/share/fonts/truetype/arphic/ukai.ttc')
 
