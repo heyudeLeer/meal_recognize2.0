@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import cv2
 import numpy as np
 
+OPEN_CV_VERSION = cv2.__version__
 
 # 1st ,getContours
 def getContours(img):
@@ -284,7 +285,12 @@ def getAreaOneDimension(img=None,th=131,canvas=None,check=False):
 
     # get轮廓
     ret, thresh = cv2.threshold(edges, th, 255, cv2.THRESH_BINARY)
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)  # cv2.RETR_EXTERNAL RETR_LIST #thresh.copy()
+
+    if OPEN_CV_VERSION[0] == str(2):
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)  # cv2.RETR_EXTERNAL RETR_LIST #thresh.copy()
+    else:
+        _, contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
 
     if len(contours) == 0:
         return areas, canvas
@@ -331,6 +337,12 @@ print 'out opencv_tools'
 
 
 if __name__ == '__main__':
+
+    img = np.zeros((32,32))
+    getAreaOneDimension(img=img)
+
+    exit(0)
+
     from keras.preprocessing import image
 
     restaurant_path = '/home/heyude/PycharmProjects/data_set/ibm'
