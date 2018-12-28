@@ -180,7 +180,7 @@ def getThredholdValue(data_info=None): # multi: 1.2-->2.2
     data_info.threshold_value = np.uint8(th)
 
 
-def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level=0):
+def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level=3):
     '''
     :param data_set_path:
     :return:predict need info, and will be save in the data_set_path
@@ -262,7 +262,7 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
 
 
 # Once the model is created, you can test it with the following api
-def cold_predict_img(data_set_path="/path/to/data_set/restaurant_name", image_url='path/to/image',pixel_level=0,check=False):
+def load_trained_model(data_set_path="/path/to/data_set/restaurant_name", pixel_level=3):
     '''
     :param data_set_path:
     :param image_url:
@@ -293,13 +293,13 @@ def cold_predict_img(data_set_path="/path/to/data_set/restaurant_name", image_ur
     #print type(model)
 
 
-    dic = predic.segImgfile_web(data_info= predicInfo, url=image_url,out_path=data_set_path,show=check) # save pcla.jpg in data_set_path/predictImg
+    #dic = predic.segImgfile_web(data_info= predicInfo, url=image_url,out_path=data_set_path,show=check) # save pcla.jpg in data_set_path/predictImg
     #ret = predic.segImgDir(seg_model=model, data_info= predicInfo, segPath='/home/heyude/temp/seg')
 
-    return dic, predicInfo  # recognition_info
+    return predicInfo  # recognition_info
 
 
-def hot_predict_img(data_set_path="/path/to/data_set/restaurant_name", image_url='path/to/image',predict_info=None,check=False):
+def predict_img(image_url='path/to/image',predict_info=None, check=False,data_set_path="/path/to/data_set/restaurant_name"):
 
     # load model on disk by name
     #model = predict_info.model

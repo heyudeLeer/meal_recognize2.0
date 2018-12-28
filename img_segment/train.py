@@ -327,9 +327,9 @@ def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None
         #new_weights = model.get_weights()
         #data_info.model.set_weights(new_weights)  # update: model1 load model2 weights
 
-        nowTime = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')  # 现在
-        temp_weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/one_hot_boost-'+nowTime+'.hdf5'
-        model.save_weights(temp_weight_file)
+        #nowTime = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')  # 现在
+        #temp_weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/one_hot_boost-'+nowTime+'.hdf5'
+        #model.save_weights(temp_weight_file)
 
     # fine tuning and val
     #data_info.enhance_enable = False
@@ -364,10 +364,10 @@ def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None
         #new_weights = model.get_weights()
         #data_info.model.set_weights(new_weights)  # update: model1 load model2 weights
 
-        nowTime = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')  # 现在
-        temp_weight_file = data_set_path + '/predictInfo/pixel_level' + str(
-            data_info.pixel_level) + '/one_hot_boost-' + nowTime + '.hdf5'
-        model.save_weights(temp_weight_file)
+        #nowTime = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')  # 现在
+        #temp_weight_file = data_set_path + '/predictInfo/pixel_level' + str(
+        #    data_info.pixel_level) + '/one_hot_boost-' + nowTime + '.hdf5'
+        #model.save_weights(temp_weight_file)
         model.save_weights(weight_file)
 
     del data_info.model
