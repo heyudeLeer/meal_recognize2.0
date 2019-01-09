@@ -65,6 +65,11 @@ def test_hot_predict_by_dir(segPath=None,restaurant_path=None,model_info=None):
         print
 
 
+def model_check_test(restaurant_path=None):
+    check_path = '/home/heyude/data_set/gpu_model/model/predictImg/img/check'
+    pixclass.model_check(data_set_path=restaurant_path, img_path=check_path)
+
+
 if __name__ == '__main__':
 
     restaurant_path = 'data_set/gpu_model/model'
@@ -72,6 +77,10 @@ if __name__ == '__main__':
     home = os.path.expandvars('$HOME')
     restaurant_path = home + '/' + restaurant_path
     img_url = home + '/' + img_url
+
+    model_check_test(restaurant_path=restaurant_path)
+    exit(0)
+
 
     img_url1 = '/home/heyude/data_set/model/predictImg/img/fdbd7eda-14e3-4aa4-88f5-1dd4252a6c2f.jpg'
     img_url2 = '/home/heyude/data_set/model/predictImg/img/78288410-6ecd-4fed-ac51-0e472a078ce0.jpg'
@@ -89,10 +98,6 @@ if __name__ == '__main__':
     img_url4 = '/home/heyude/data_set/gpu_model/model/predictImg/img/pingpan_s/IMG_20181121_150231.jpg'
     img_url5 = '/home/heyude/data_set/gpu_model/model/predictImg/img/pingpan_s/IMG_20181121_150159.jpg'
     img_url6 = '/home/heyude/data_set/gpu_model/model/predictImg/img/pingpan_s/IMG_20181121_150009.jpg'
-
-
-
-
 
     #data_label.filter_xy(path='/home/heyude/PycharmProjects/data_set/test0817/predictImg/test')
     #data_label.pre_data_set(data_set_path=restaurant_path) #only one time for every data_set

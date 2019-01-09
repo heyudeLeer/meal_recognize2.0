@@ -8,6 +8,8 @@ import numpy as np
 from keras.models import load_model
 from time import sleep, time
 import tensorflow as tf
+import matplotlib.pyplot as plt
+import cv2
 
 import train
 import predic
@@ -324,6 +326,79 @@ def predict_img(image_url='path/to/image',predict_info=None, check=False,data_se
     # ret = predic.segImgDir(seg_model=model, data_info= predic_info, segPath='/home/heyude/temp/seg')
 
     return dic  # recognition_info
+
+
+def model_check(data_set_path=None, img_path=None):
+    '''
+    images in folder segmentation
+    :param segPath: images path
+    :return: print and plt show result
+    '''
+    PredictInfo_0 = load_trained_model(data_set_path,pixel_level=0)
+    PredictInfo = load_trained_model(data_set_path)
+
+
+    for _, dirs, _ in os.walk(img_path):
+        break
+
+    for dir_name in dirs:
+        print ("coming " + img_path+'/'+dir_name)
+        for _, _, files in os.walk(img_path+'/'+dir_name):
+            break
+        n = len(files)
+        i = 0
+        plt.figure(figsize=(20, 8))
+        print 'files num is ' + str(n)
+
+        for file in files:
+            print
+            url = img_path+'/'+dir_name + '/' + file
+            print ('predict  '+url)
+            img = data_label.loadImage(url=url,data_info=PredictInfo)
+            _, pred = PredictInfo.model.predict(img)
+            _, pred_0 = PredictInfo_0.model.predict(img)
+
+            RgbImg,dishes_info = predic.getRgbImgFromUpsampling(imgP=pred, data_info=PredictInfo)
+            dishes_info, canvas = predic.getDishesBySegImg(dataInfo=PredictInfo, segImg=pred[0],drawCnt=2)
+
+            RgbImg_0, dishes_info_0 = predic.getRgbImgFromUpsampling(imgP=pred_0, data_info=PredictInfo_0)
+            dishes_info_0, canvas_0 = predic.getDishesBySegImg(dataInfo=PredictInfo_0, segImg=pred_0[0], drawCnt=2)
+
+            i += 1
+            # display source img
+            ax = plt.subplot(5, n, i)
+            ax.set_title(file[-8:-1])
+            ax.imshow(img[0]/255.)
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+
+            ax = plt.subplot(5, n, i+n)
+            ax.set_title('base')
+            # display result
+            ax.imshow(RgbImg_0)
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+
+            ax = plt.subplot(5, n, i + n*2)
+            # display result
+            ax.imshow(RgbImg)
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+
+            #img = data_label.loadImage(url=plca_path + '/' + shotname+'_pcla.jpg',data_info=PredictInfo)
+            ax = plt.subplot(5, n, i+n*3)
+            ax.set_title('base')
+            ax.imshow(canvas_0/255.)
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+
+            ax = plt.subplot(5, n, i + n * 4)
+            ax.imshow(canvas / 255.)
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+
+        plt.show()
+        plt.close()
 
 
 
