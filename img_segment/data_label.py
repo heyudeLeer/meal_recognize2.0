@@ -30,6 +30,8 @@ import cv2
 from keras import backend as K
 from keras.preprocessing import image
 import random
+import pixclass
+import predic
 
 
 def get_session(gpu_fraction=0.8):
@@ -209,42 +211,122 @@ def enhance_by_random(x=None, data_info=None,if_save=False ):
     return x
 
 
-def loadImage(url=None, use_cv2=True,data_info=None):
+def loadImage(url=None, data_info=None,cv2=False):
 
-    if use_cv2 is False:
-        img = image.load_img(url)#,target_size=(data_info.IMG_ROW,data_info.IMG_COL))
-        img = image.img_to_array(img)
-        h, w, z = img.shape
-        if w > h:
-            img = np.transpose(img, (1, 0, 2))
-            print 'transpose '
-            print url
-
-        x = cv2.resize(img, (data_info.IMG_COL, data_info.IMG_ROW),interpolation=cv2.INTER_AREA)  # attention cv2 imgCols/imgRows exchange
-        x = np.expand_dims(x, axis=0)
-        #x = preprocess_input(x)
-        #x = np.array(x) / 255.
-        return x
+    if cv2 is True:
+        return load_image_cv2(url,data_info)
     else:
-        y = cv2.imread(url)
-        h, w, z = y.shape
-        if w > h:
-            y = np.transpose(y, (1, 0, 2))
-            print 'transpose '
-            print url
+        return load_image_pil(url,data_info)
 
-        y = cv2.resize(y, (data_info.IMG_COL, data_info.IMG_ROW), interpolation=cv2.INTER_AREA) # attention cv2 imgCols/imgRows exchange
-        y = np.expand_dims(y, axis=0)
-        y = y[:, :, :, ::-1]
-        #cv2.imshow('imgcv2', y[0])
-        #cv2.waitKey(0)
-        # y = np.array(y) / 255.
-        return y
 
-    # deprecated, use PIL
-    img = [np.transpose(scipy.misc.imresize(scipy.misc.imread(url), (imgRows, imgCols)), (0, 1, 2))]
-    scipy.misc.imshow(img[0])
-    return img
+def load_image_cv2(url=None,data_info=None):
+    y = cv2.imread(url)
+    h, w, z = y.shape
+    if w > h:
+        y = np.transpose(y, (1, 0, 2))
+        # print 'transpose '
+        # print url
+
+    y = np.array(y, dtype=np.float32)
+    y = cv2.resize(y, (data_info.IMG_COL, data_info.IMG_ROW), interpolation=cv2.INTER_AREA)
+    y = np.expand_dims(y, axis=0)
+    y = y[:, :, :, ::-1]
+    # print(type(y[0]), y[0].dtype, np.min(y[0]), np.max(y[0]))
+
+    return y
+
+def load_image_pil(url=None,data_info=None):
+
+    img = pil_image.open(url)
+    #print img.size
+    w,h = img.size
+    if w <= h:
+        img = img.resize((data_info.IMG_COL, data_info.IMG_ROW), pil_image.BILINEAR)
+        #print img.size
+        x = image.img_to_array(img)
+        #print x.shape
+
+    else:
+        img = img.resize((data_info.IMG_ROW , data_info.IMG_COL), pil_image.BILINEAR)
+        #print img.size
+        x = image.img_to_array(img)
+        #print x.shape
+        x = np.transpose(x, (1, 0, 2))
+        #print 'transpose '
+        #print x.shape
+
+    x = np.expand_dims(x, axis=0)
+    #x = preprocess_input(x)
+    #print 'load_img'
+    #print(type(x[0]), x[0].dtype, np.min(x[0]), np.max(x[0]))
+
+    return x
+
+
+def test_load_img(data_set_path=None, img_path=None):
+    '''
+    images in folder segmentation
+    :param segPath: images path
+    :return: print and plt show result
+    '''
+    PredictInfo = pixclass.load_trained_model(data_set_path,pixel_level=0)
+
+    for _, dirs, _ in os.walk(img_path):
+        break
+
+    for dir_name in dirs:
+        print ("coming " + img_path+'/'+dir_name)
+        for _, _, files in os.walk(img_path+'/'+dir_name):
+            break
+        n = len(files)
+        i = 0
+        plt.figure(figsize=(20, 8))
+        print 'files num is ' + str(n)
+
+        for file in files:
+            print
+            url = img_path+'/'+dir_name + '/' + file
+            print ('predict  '+url)
+            img_0 = loadImage(url=url,data_info=PredictInfo,cv2=True)
+            img = loadImage(url=url,data_info=PredictInfo)
+
+            _, pred = PredictInfo.model.predict(img)
+            _, pred_0 = PredictInfo.model.predict(img_0)
+
+            RgbImg,dishes_info = predic.getRgbImgFromUpsampling(imgP=pred, data_info=PredictInfo)
+
+            RgbImg_0, dishes_info_0 = predic.getRgbImgFromUpsampling(imgP=pred_0, data_info=PredictInfo)
+
+            i += 1
+            # display source img
+            ax = plt.subplot(4, n, i)
+            ax.set_title(file[-8:-1])
+            ax.imshow(img_0[0]/255.)
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+
+            ax = plt.subplot(4, n, i+n)
+            ax.set_title('base')
+            # display result
+            ax.imshow(RgbImg_0)
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+
+            ax = plt.subplot(4, n, i + n*2)
+            # display result
+            ax.imshow(RgbImg)
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+
+            #img = data_label.loadImage(url=plca_path + '/' + shotname+'_pcla.jpg',data_info=PredictInfo)
+            ax = plt.subplot(4, n, i+n*3)
+            ax.imshow(img[0]/255.)
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+
+        plt.show()
+        plt.close()
+
 
 
 def mean_CCE_loss(y_true=0, y_pred=0,data_info=None):

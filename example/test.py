@@ -65,10 +65,14 @@ def test_hot_predict_by_dir(segPath=None,restaurant_path=None,model_info=None):
         print
 
 
-def model_check_test(restaurant_path=None):
+def test_load_img(restaurant_path=None):
     check_path = '/home/heyude/data_set/gpu_model/model/predictImg/img/check'
-    pixclass.model_check(data_set_path=restaurant_path, img_path=check_path)
+    data_label.test_load_img(data_set_path=restaurant_path, img_path=check_path)
 
+
+def test_model_check(restaurant_path=None):
+    check_path = '/home/heyude/data_set/gpu_model/model/predictImg/img_rs/check'
+    pixclass.model_check(data_set_path=restaurant_path, img_path=check_path)
 
 if __name__ == '__main__':
 
@@ -78,7 +82,9 @@ if __name__ == '__main__':
     restaurant_path = home + '/' + restaurant_path
     img_url = home + '/' + img_url
 
-    model_check_test(restaurant_path=restaurant_path)
+    #test_model_check(restaurant_path=restaurant_path)
+    test_load_img(restaurant_path=restaurant_path)
+
     exit(0)
 
 
