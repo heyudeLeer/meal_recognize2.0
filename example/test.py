@@ -71,7 +71,7 @@ def test_load_img(restaurant_path=None):
 
 
 def test_model_check(restaurant_path=None):
-    check_path = '/home/heyude/data_set/gpu_model/model/predictImg/img_rs/check'
+    check_path = '/home/heyude/data_set/gpu_model/model/predictImg/img/check'
     pixclass.model_check(data_set_path=restaurant_path, img_path=check_path)
 
 if __name__ == '__main__':
@@ -82,8 +82,14 @@ if __name__ == '__main__':
     restaurant_path = home + '/' + restaurant_path
     img_url = home + '/' + img_url
 
-    #test_model_check(restaurant_path=restaurant_path)
-    test_load_img(restaurant_path=restaurant_path)
+    nowTime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 现在
+    print nowTime
+    model_info = train(restaurant_path=restaurant_path)
+    nowTime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 现在
+    print nowTime
+
+    test_model_check(restaurant_path=restaurant_path)
+    #test_load_img(restaurant_path=restaurant_path)
 
     exit(0)
 
@@ -112,6 +118,7 @@ if __name__ == '__main__':
     model_info=train(restaurant_path=restaurant_path)
     nowTime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 现在
     print nowTime
+    exit(0)
     model_info=predict(restaurant_path=restaurant_path,img_url=img_url3)
     #hot_test(restaurant_path=restaurant_path, img_url=img_url4, model_info=model_info)
     test_hot_predict_by_dir(restaurant_path=restaurant_path, segPath=restaurant_path + '/predictImg/img/pingpan_hot_test', model_info=model_info)

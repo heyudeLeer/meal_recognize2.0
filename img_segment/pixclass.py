@@ -113,6 +113,7 @@ class DataInfo:
             self.REDUCE_TIME = 3
             self.batch_size_GPU = 3
 
+
         else:
             print "error, pixel_level should in [0,3]"
             exit(0)
@@ -273,7 +274,7 @@ def load_trained_model(data_set_path="/path/to/data_set/restaurant_name", pixel_
 
     lib_name = os.path.basename(data_set_path)
     # load model on disk by name
-    model = load_model(filepath= data_set_path +'/predictInfo/pixel_level'+ str(pixel_level) +'/'+lib_name +'.h5')
+    model = load_model(data_set_path +'/predictInfo/pixel_level'+ str(pixel_level) +'/'+lib_name +'.h5')
     #model.summary()
 
 
@@ -354,9 +355,11 @@ def model_check(data_set_path=None, img_path=None):
             print
             url = img_path+'/'+dir_name + '/' + file
             print ('predict  '+url)
+            img_0 = data_label.loadImage(url=url,data_info=PredictInfo_0)
             img = data_label.loadImage(url=url,data_info=PredictInfo)
+
             _, pred = PredictInfo.model.predict(img)
-            _, pred_0 = PredictInfo_0.model.predict(img)
+            _, pred_0 = PredictInfo_0.model.predict(img_0)
 
             RgbImg,dishes_info = predic.getRgbImgFromUpsampling(imgP=pred, data_info=PredictInfo)
             dishes_info, canvas = predic.getDishesBySegImg(dataInfo=PredictInfo, segImg=pred[0],drawCnt=2)

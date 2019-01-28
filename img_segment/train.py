@@ -9,15 +9,15 @@ import time
 import numpy as np
 import keras
 
-from keras import regularizers
-from keras.models import Model
+from keras.models import load_model,Model
 from keras.layers import Dropout, Activation, Input, GlobalAveragePooling2D
 from keras.layers import Conv2D, MaxPooling2D, UpSampling2D, BatchNormalization
 from keras import backend as K
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 import data_label
 
-
+import sys
+print(sys.path)
 
 def categorical_crossentropy(y_true, y_pred):
     return K.categorical_crossentropy(y_true, y_pred)
@@ -46,27 +46,20 @@ def creatXception(data_info=None):
     DIVx = data_info.CNN_OUT_DIV
     # default
     if DIVx==None:
-        from keras.applications.xception import Xception
+        from keras_applications.xception import Xception
         base_model = Xception(weights='imagenet', include_top=False, input_shape=inputShape)
         print 'you chose default mode'
 
     # outsize changed mode
     else:
-        import xception_outsize_change
         from xception_outsize_change import Xception
-        #base_model = Xception(include_top=False, input_shape=inputShape, DIVx=DIVx)
-        #base_model.load_weights('/home/heyude/.keras/models/xception_weights_tf_dim_ordering_tf_kernels_notop.h5', by_name=True)
-        if data_info.init:
-            base_model = Xception(include_top=False, input_shape=inputShape,weights='imagenet',DIVx=DIVx,init=True)
-        else:
-            base_model = Xception(include_top=False, input_shape=inputShape, DIVx=DIVx,init=False)
-
+        base_model = Xception(weights='imagenet', include_top=False, input_shape=inputShape, DIVx=DIVx)
 
     # FCN network
     x = base_model.output
     x = Dropout(0.5)(x)
 
-    #x = UpSampling2D((4, 4))(x)
+    #x = UpSampling2D((2, 2))(x)
     #x = Dropout(0.25)(x)
     #x = Conv2D(1024, (1, 1), use_bias=False, name='out_conv1')(x)
     #x = Conv2D(1024, (1, 1), use_bias=False, name='out_conv1', kernel_regularizer=regularizers.l2(0.01))(x)
@@ -123,15 +116,6 @@ def train_model(data_set_path=None, data_info=None, boost=True, toBool=False):
         data_label.one_hot_self_check(model=model, data_info=data_info, extend=5, thickness=1e-5)
 
     if boost is True:
-        ### froze cnn ,and re train
-        for layer in model.layers[:]:
-            layer.trainable = False
-            print 'boost froze' + layer.name
-            if layer.name == 'block6_add':  # block6_add:GPU8
-                break
-        data_info.batch_size_GPU = 8
-        data_label.get_data_info(data_set_path=data_set_path, data_info=data_info)
-
         model = boost_one_hot(data_set_path=data_set_path, data_info=data_info,weight_file=weight_file,model=model)
 
         #weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/one_hot_boost_1by1.hdf5'
@@ -169,7 +153,7 @@ def train_model(data_set_path=None, data_info=None, boost=True, toBool=False):
             print 'boost froze' + layer.name
             if layer.name == 'block13_add':
                 break
-        data_info.batch_size_GPU = 4
+        data_info.batch_size_GPU = 3
         data_label.get_data_info(data_set_path=data_set_path, data_info=data_info)
 
         weight_file = data_set_path + '/predictInfo/pixel_level' + str(
@@ -206,17 +190,13 @@ def ont_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
     if data_info.label_mode == 0:
         if data_info.CCE is True:
             loss = {'main_out': 'categorical_crossentropy'}
-            metr = keras.metrics.categorical_accuracy
         else:
             loss = {'main_out': 'binary_crossentropy'}
-            metr = keras.metrics.binary_accuracy
 
         data_gen = data_label.train_generator_clearbg(data_info=data_info)  #data_info.train_generator
-        loss_weights = None
     elif data_info.label_mode == 1:
         loss = {'seg_out': 'msle'}
         data_gen = data_label.train_generator_with2Dlabel(data_info=data_info)
-        loss_weights = None
     elif data_info.label_mode == 2:
         loss = {'main_out': 'categorical_crossentropy', 'seg_out': 'msle'}
         data_gen = data_label.train_generator_with2Dlabel(data_info=data_info)
@@ -232,19 +212,19 @@ def ont_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
     model.compile(
     optimizer=opt,
     loss=loss,
-    loss_weights=loss_weights,
-    metrics=[metr]
+    metrics=[keras.metrics.categorical_accuracy]
     )
     model.summary()
     model.fit_generator(
         generator=data_gen,
-        epochs=8,
+        epochs=0,
         steps_per_epoch=steps_per_epoch_train,
         #workers=data_info.cpus,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
         #validation_data=data_info.val_datas,#data_info.val_generator,
         #callbacks=[checkpoint, early_stopping],
         #max_queue_size=32,
     )
+    del data_gen
 
     # fine tuning and val
     ### froze cnn ,and re train
@@ -261,27 +241,30 @@ def ont_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
     else:
         steps_per_epoch_train = (data_info.train_img_num / data_info.batch_size_GPU + 1) * data_info.train_data_extend
     print 'steps_per_epoch_train is ' + str(steps_per_epoch_train)
+    data_gen = data_label.train_generator_clearbg(data_info=data_info)  # data_info.train_generator
+
     #if data_info.epoch > 0:
     #    data_info.val_datas = data_label.one_hot_getValDatas(data_info=data_info) #单独跑一趟，后面的训练速度意外的快很多，不明白为什么
 
     model.compile(
         optimizer=opt,
         loss=loss,
-        loss_weights=loss_weights,
-        metrics=[metr]
+        metrics=[keras.metrics.categorical_accuracy]
     )
     model.summary()
     model.fit_generator(
         generator=data_gen,
-        epochs=15,
+        epochs=0,
         steps_per_epoch=steps_per_epoch_train,
         # workers=data_info.cpus,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
         validation_data=(data_info.one_hot_x_val,data_info.one_hot_y_val),  # data_info.val_generator,
         callbacks=[checkpoint, early_stopping],
     )
-
     del data_gen
-    model.load_weights(filepath=weight_file)
+    #model.load_weights(filepath=weight_file)
+    model.load_weights(weight_file)
+    #def load_weights(self, filepath, by_name=False,skip_mismatch=False, reshape=False):
+
     return model
 
 
@@ -289,8 +272,7 @@ def ont_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
 def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None):
 
     data_info.model = creatXception(data_info)
-    data_info.model.load_weights(filepath=weight_file)     #init: model2 load model1 weights
-    model.load_weights(filepath=weight_file)
+    data_info.model.load_weights(weight_file)     #init: model2 load model1 weights
 
     weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/one_hot_boost.hdf5'
     opt = keras.optimizers.rmsprop(lr=0.0001, decay=1e-6)  # 'rmsprop' #
@@ -318,11 +300,11 @@ def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None
         metrics=[keras.metrics.categorical_accuracy]
     )
     model.summary()
-    for i in range(4):
+    for i in range(1):
         model.fit_generator(
             generator=boost_generator,
             steps_per_epoch=steps_per_epoch_train,
-            epochs=1,
+            epochs=5,
         )
         #new_weights = model.get_weights()
         #data_info.model.set_weights(new_weights)  # update: model1 load model2 weights
@@ -330,13 +312,13 @@ def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None
         #nowTime = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')  # 现在
         #temp_weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/one_hot_boost-'+nowTime+'.hdf5'
         #model.save_weights(temp_weight_file)
-
+    del boost_generator
     # fine tuning and val
     #data_info.enhance_enable = False
     for layer in model.layers[:]:
         layer.trainable = False
         print 'boost froze' + layer.name
-        if layer.name == 'block12_add':  # block6_add:GPU8
+        if layer.name =='block12_add':# 'block12_sepconv2_act': # 'block12_add':  # block6_add:GPU8
             break
     data_info.batch_size_GPU = 12
     data_label.get_data_info(data_set_path=data_set_path, data_info=data_info)
@@ -346,6 +328,10 @@ def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None
     else:
         steps_per_epoch_train = (data_info.train_img_num / data_info.batch_size_GPU + 1) * data_info.train_data_extend
     print 'steps_per_epoch_train is ' + str(steps_per_epoch_train)
+
+
+    boost_generator = data_label.predict_2Dlabel_generator(data_info=data_info)
+    #boost_generator.next()
 
     model.compile(
         optimizer=opt,
@@ -357,7 +343,7 @@ def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None
         model.fit_generator(
             generator=boost_generator,
             steps_per_epoch=steps_per_epoch_train,
-            epochs=1,
+            epochs=2,
             #validation_data=(data_info.boost_x_val, data_info.boost_label_val),
             #callbacks=[checkpoint, early_stopping]
         )
@@ -370,6 +356,7 @@ def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None
         #model.save_weights(temp_weight_file)
         model.save_weights(weight_file)
 
+    del boost_generator
     del data_info.model
 
     #model.load_weights(filepath=weight_file)
