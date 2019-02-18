@@ -217,7 +217,7 @@ def ont_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
     model.summary()
     model.fit_generator(
         generator=data_gen,
-        epochs=0,
+        epochs=8,
         steps_per_epoch=steps_per_epoch_train,
         #workers=data_info.cpus,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
         #validation_data=data_info.val_datas,#data_info.val_generator,
@@ -254,7 +254,7 @@ def ont_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
     model.summary()
     model.fit_generator(
         generator=data_gen,
-        epochs=0,
+        epochs=15,
         steps_per_epoch=steps_per_epoch_train,
         # workers=data_info.cpus,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
         validation_data=(data_info.one_hot_x_val,data_info.one_hot_y_val),  # data_info.val_generator,
@@ -354,8 +354,8 @@ def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None
         #temp_weight_file = data_set_path + '/predictInfo/pixel_level' + str(
         #    data_info.pixel_level) + '/one_hot_boost-' + nowTime + '.hdf5'
         #model.save_weights(temp_weight_file)
-        model.save_weights(weight_file)
 
+    model.save_weights(weight_file)
     del boost_generator
     del data_info.model
 
