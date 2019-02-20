@@ -57,32 +57,64 @@ def pre_data_set(data_set_path=None,project_path=None):
     lib_name  = os.path.basename(data_set_path)
     temp_path = data_set_path + '/' + lib_name
     print 'data set img path ' + temp_path
-    filter_xy(path=temp_path)
+    filter_xy_cv2(path=temp_path)
     os.system("cd %s; ./split.sh %s 0.0" % (data_set_path, temp_path))
     print 'split %s to train and validation' % temp_path
 
-def filter_xy(path=None):   # shape to same
+
+def filter_xy_pil(path=None):   # shape to same
 
     for _, dirs, _ in os.walk(path):
-        for dirName in dirs:
-            print
-            print ("coming "+ dirName)
-            for _, _, files in os.walk(path+'/'+dirName):
-                break
-            n = len(files)
-            print 'files num is ' + str(n)
+        break
 
-            for file in files:
-                url = path + '/' + dirName + '/' + file
-                img = cv2.imread(url)
-                h,w,z = img.shape
-                if w > h:
-                    img = np.transpose(img, (1, 0, 2))
-                    print 'transpose '
-                    print url
-                    print img.shape
+    for dirName in dirs:
+        print
+        print ("coming "+ dirName)
+        for _, _, files in os.walk(path+'/'+dirName):
+            break
+        n = len(files)
+        print 'files num is ' + str(n)
 
-                    cv2.imwrite(url,img)
+        for file in files:
+            url = path + '/' + dirName + '/' + file
+            img = pil_image.open(url)
+            w, h = img.size
+            if w > h:
+                x = image.img_to_array(img)
+                # print x.shape
+                x = np.transpose(x, (1, 0, 2))
+                print 'transpose '
+                print url
+                print img.size
+                x = array_to_img(x)
+                x.save(url)               #2.2M to 700k
+
+
+def filter_xy_cv2(path=None):   # shape to same
+
+    for _, dirs, _ in os.walk(path):
+        break
+
+    for dirName in dirs:
+        print
+        print ("coming "+ dirName)
+        for _, _, files in os.walk(path+'/'+dirName):
+            break
+        n = len(files)
+        print 'files num is ' + str(n)
+
+        for file in files:
+            url = path + '/' + dirName + '/' + file
+            img = cv2.imread(url)
+            h,w,z = img.shape
+            if w > h:
+                img = np.transpose(img, (1, 0, 2))
+                print 'transpose '
+                print url
+                print img.shape
+
+                cv2.imwrite(url,img)    # 2.2M to 1.9M
+
 
 # this is the augmentation configuration we will use for training
 def get_data_info(data_set_path=None, data_info=None):
