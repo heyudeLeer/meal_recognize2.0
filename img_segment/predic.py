@@ -606,10 +606,17 @@ def getPerPixels(setsPath=None, data_info=None):
     for item in range(objects):
         dirName = data_info.class_name_dic_t.get(item)  # item is dish index; key is dish name
         if dirName == 'bg':  # 抑制背景，效果还不错，也够简单
+            data_info.object_pixels_avg.append(1.0)
+            data_info.object_area_avg.append(1.0)
             continue
 
         for _, _, files in os.walk(setsPath + '/' + dirName):
             break
+
+        if len(files)==0:
+            data_info.object_pixels_avg.append(250)
+            data_info.object_area_avg.append(250)
+            continue
 
         dot_sum = 0
         area_sum = 0
@@ -645,10 +652,10 @@ def getPerPixels(setsPath=None, data_info=None):
         data_info.object_pixels_avg.append(pixel_avg)
         data_info.object_area_avg.append(area_avg)
 
-        print 'data_info.object_pixels_avg:'
-        print data_info.object_pixels_avg
-        print 'data_info.object_area_avg:'
-        print data_info.object_area_avg
+    print 'data_info.object_pixels_avg:'
+    print data_info.object_pixels_avg
+    print 'data_info.object_area_avg:'
+    print data_info.object_area_avg
 
 
 def CalcAccuracySegDir(PredictInfo=None,setsPath=None,top=3,verbose=1,data_set_path=None):

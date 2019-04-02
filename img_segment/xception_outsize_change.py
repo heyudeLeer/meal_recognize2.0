@@ -185,7 +185,7 @@ def Xception(include_top=True,
     x = layers.Activation('relu', name='block4_sepconv2_act')(x)
     x = layers.SeparableConv2D(728, (3, 3), strides=(1, 1),padding='same', use_bias=False, name='block4_sepconv2')(x)
     x = layers.BatchNormalization(name='block4_sepconv2_bn')(x)
-    x = layers.MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='block4_pool')(x)
+    x = layers.MaxPooling2D((3, 3), strides=(2, 2), padding='same', name='block4_pool')(x)
     x = layers.add([x, residual])
 
     for i in range(8):

@@ -61,7 +61,7 @@ def creatXception(data_info=None):
 
     #x = UpSampling2D((2, 2))(x)
     #x = Dropout(0.25)(x)
-    #x = Conv2D(1024, (1, 1), use_bias=False, name='out_conv1')(x)
+    x = Conv2D(256, (1, 1), use_bias=False, name='out_conv1')(x)
     #x = Conv2D(1024, (1, 1), use_bias=False, name='out_conv1', kernel_regularizer=regularizers.l2(0.01))(x)
     #x = BatchNormalization(name='out_conv1_bn')(x)
     #x = Activation('relu', name='out_conv1_act')(x)
@@ -76,7 +76,6 @@ def creatXception(data_info=None):
     # comm_weights_model = Model(base_model.input, x, name='xception_fcn')  # if big data_set for future
 
     #x = UpSampling2D((2, 2))(x)
-    x = Dropout(0.5)(x)
     x = Conv2D(data_info.class_num, (1, 1), use_bias=False, name='conv_out')(x)
     #x = BatchNormalization(name='out_conv3_bn')(x)
     #x = Activation('relu', name='out_conv3_act')(x)
@@ -99,7 +98,7 @@ def creatXception(data_info=None):
     return trainModel
 
 
-def train_model(data_set_path=None, data_info=None, boost=True, toBool=False):
+def train_model(data_set_path=None, data_info=None, toBool=False):
 
     if data_info.CCE is True:
         model_str = 'softmax'
@@ -107,19 +106,21 @@ def train_model(data_set_path=None, data_info=None, boost=True, toBool=False):
         model_str = 'sigmoid'
 
     model = creatXception(data_info)
-    weight_file = data_set_path + '/predictInfo/pixel_level'+str(data_info.pixel_level) + '/one_hot_'+ model_str+ '.hdf5'
 
+    weight_file = data_set_path + '/predictInfo/pixel_level'+str(data_info.pixel_level) + '/one_hot_'+ model_str+ '.hdf5'
     model = ont_hot(data_set_path=data_set_path, model=model, weight_file=weight_file, data_info=data_info)
+    #model.load_weights(weight_file)
 
     if data_info.ont_hot_check is True:
         model.load_weights(filepath=weight_file)
         data_label.one_hot_self_check(model=model, data_info=data_info, extend=5, thickness=1e-5)
 
-    if boost is True:
-        model = boost_one_hot(data_set_path=data_set_path, data_info=data_info,weight_file=weight_file,model=model)
+    data_info.model = creatXception(data_info)
+    data_info.model.load_weights(weight_file)
 
-        #weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/one_hot_boost_1by1.hdf5'
-        #model = boost_one_hot_1by1(data_set_path=data_set_path, model=model,weight_file=weight_file, data_info=data_info)
+    weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/one_hot_boost.hdf5'
+    model = boost_one_hot(data_set_path=data_set_path, data_info=data_info,weight_file=weight_file,model=model)
+    #model.load_weights(weight_file)
 
     if data_info.boost_self_check:
         weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/one_hot_boost.hdf5'
@@ -147,7 +148,7 @@ def train_model(data_set_path=None, data_info=None, boost=True, toBool=False):
                 break
         data_label.get_data_info(data_set_path=data_set_path, data_info=data_info)
         model = ont_hot(model=model, weight_file=weight_file, data_info=data_info)
-    if boost is True and enlargex2 > 0:
+    if enlargex2 > 0:
         for layer in model.layers[:]:
             layer.trainable = False
             print 'boost froze' + layer.name
@@ -271,10 +272,6 @@ def ont_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
 # model1 predict,model2 train,model1 load model2 weights,next epoch
 def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None):
 
-    data_info.model = creatXception(data_info)
-    data_info.model.load_weights(weight_file)     #init: model2 load model1 weights
-
-    weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/one_hot_boost.hdf5'
     opt = keras.optimizers.rmsprop(lr=0.0001, decay=1e-6)  # 'rmsprop' #
     loss = {'seg_out': 'categorical_crossentropy'}
     early_stopping = EarlyStopping(monitor='val_loss', patience=1, min_delta=3e-5)
@@ -304,7 +301,7 @@ def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None
         model.fit_generator(
             generator=boost_generator,
             steps_per_epoch=steps_per_epoch_train,
-            epochs=5,
+            epochs=3,
         )
         #new_weights = model.get_weights()
         #data_info.model.set_weights(new_weights)  # update: model1 load model2 weights
@@ -359,7 +356,6 @@ def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None
     del boost_generator
     del data_info.model
 
-    #model.load_weights(filepath=weight_file)
     return model
 
 
