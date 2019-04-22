@@ -34,11 +34,14 @@ class DataInfo:
         self.step_check = False
 
         self.epoch = 30
-        self.CCE = True
-        self.ont_hot_check = False
-        self.boost_self_check = False
+        self.one_hot_check = True
+        self.boost_self_check = True
 
-        self.ont_hot_check_save_path = None
+        self.base_model = None
+        self.base_model_weight_file = None
+        self.steps_per_epoch = 0
+
+        self.one_hot_check_save_path = None
         self.boost_self_check_save_path = None
 
         self.start_get_val =False
@@ -46,6 +49,8 @@ class DataInfo:
         self.one_hot_y_val = None
         self.boost_x_val = None
         self.boost_label_val = None
+        self.val_full = False
+        self.median_th = 1e-4
 
                            #brightness_range, color_range, contrast_range, sharpness_range
         self.enhance_par = [  (0.75, 1.15),      (0.8, 1.4),  (0.8, 1.4),    (0.8, 1.4)]
@@ -59,7 +64,6 @@ class DataInfo:
         self.init=True
         self.pixel_level= 0
 
-        self.strenghthen_train_flag = False
         self.overlayerBg=True
         self.back_ground_path='/home/heyude/PycharmProjects/data_set/snacks2.0/black/bg'
 
@@ -209,14 +213,14 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
     with tf.Session() as sess:
         dataInfo.sess = sess
 
-    if dataInfo.ont_hot_check is True:
+    if dataInfo.one_hot_check is True:
         # save self_check err imgs in the data_set_path
         self_check_path = data_set_path + '/predictInfo/pixel_level' + str(pixel_level) + '/self_check/one_hot'
         isExists = os.path.exists(self_check_path)
         if not isExists:
             os.makedirs(self_check_path)
             print 'mkdir ' + self_check_path
-        dataInfo.ont_hot_check_save_path = self_check_path
+        dataInfo.one_hot_check_save_path = self_check_path
     if dataInfo.boost_self_check is True:
         # save self_check err imgs in the data_set_path
         self_check_path = data_set_path + '/predictInfo/pixel_level' + str(pixel_level) + '/self_check/one_hot_boost'
@@ -229,10 +233,6 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
     # train CNNs
     dataInfo.model = train.train_model(data_set_path=data_set_path,
                                                     data_info=dataInfo)  # save model weights on disk
-    if dataInfo.strenghthen_train_flag is True:
-        # strengthen train by one-hot segmodel
-        dataInfo.model = train.train_model_by_predict(data_set_path=data_set_path,
-                                                  data_info=dataInfo)  # save model weights on disk
 
     # get predict info
     predicInfo = PredictInfo()

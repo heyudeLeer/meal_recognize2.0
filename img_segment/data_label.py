@@ -164,7 +164,14 @@ def get_data_info(data_set_path=None, data_info=None):
         class_mode='categorical'
     )
     data_info.val_img_num = data_info.val_generator.samples
-    print 'train data init finsh'
+
+    remainder = data_info.train_img_num % data_info.batch_size_GPU
+    if remainder == 0:
+        steps_per_epoch = (data_info.train_img_num / data_info.batch_size_GPU) * data_info.train_data_extend
+    else:
+        steps_per_epoch = (data_info.train_img_num / data_info.batch_size_GPU + 1) * data_info.train_data_extend
+    print 'steps_per_epoch is ' + str(steps_per_epoch)
+    data_info.steps_per_epoch = steps_per_epoch
 
 
 def enhance_by_random(x=None, data_info=None,if_save=False ):
@@ -361,7 +368,7 @@ def test_load_img(data_set_path=None, img_path=None):
 
 
 
-def mean_CCE_loss(y_true=0, y_pred=0,data_info=None):
+def cce_loss(y_true=0, y_pred=0,data_info=None):
     #logits_scaled = tf.nn.softmax(logits)
     y_pred = tf.convert_to_tensor(y_pred, dtype=np.float32)
     y_true = tf.convert_to_tensor(y_true, dtype=np.float32)
@@ -441,7 +448,7 @@ def predict_2Dlabel_generator(data_info=None):
         sample_len = len(y)
         for i in range(sample_len):
 
-            if data_info.enhance_enable is True:
+            if data_info.enhance_enable:
                 x[i] = enhance_by_random(x=x[i], data_info=data_info)
 
             ylist = list(y[i])
@@ -471,7 +478,6 @@ def predict_2Dlabel_generator(data_info=None):
                 print k
                 k += 1
 
-
         yield (x, labsBuf[0:sample_len])
 
 
@@ -482,11 +488,9 @@ def mean_squared_error(y_true=0, y_pred=0):
 def one_hot_self_check(model=None,data_info=None,thickness=1e-4,extend=10):
 
     k = 0
-    bg_num = 0
     avg_p = 1.0 / data_info.class_num
     print '... self_check ...'
     print thickness
-    data_info.model = model
     for x, y in data_info.train_generator:
         sample_len = len(y)
         for i in range(sample_len):
@@ -495,32 +499,29 @@ def one_hot_self_check(model=None,data_info=None,thickness=1e-4,extend=10):
             ylist = list(y[i])
             index = ylist.index(1.0)
             if data_info.class_name_dic_t[index] == 'bg':
-                print 'this is bg'
-                bg_num += 1
                 y[i, :] = avg_p
                 thick = math.log(data_info.class_num) + thickness
             else:
                 thick = thickness
 
             img = np.expand_dims(x[i], axis=0)
-            y_p, seg = data_info.model.predict(img)
+            y_p, seg = model.predict(img)
 
-            main_out_loss = mean_CCE_loss(y_true=y[i], y_pred=y_p,data_info=data_info)
-            loss = main_out_loss[0]
+            loss = cce_loss(y_true=y[i], y_pred=y_p[0],data_info=data_info)
+            print
+            print(type(loss), loss.shape, loss.dtype, np.min(loss), np.max(loss))
+            loss = loss[0]
 
             if loss > thick:
-                print 'err sample...'
-                print loss
+                print 'loss big than ' + str(thick)
                 print y[i]
                 print y_p
+                print 'loss: ' + str(loss)
 
                 titels = []
-                if data_info.CCE is True:
-                    activation = 'softmax'
-                else:
-                    activation = 'sigmoid'
-                title_up1 = 'one_hot: '+activation
-                title_up2 = 'm_o/s_o/label'
+
+                title_up1 = 'one_hot'
+                title_up2 = 'y_true/y_pred/GlobAve'
                 title_down = 'main_out_loss: '+ str(format(loss,'.3e'))
                 titels.append(title_up1)
                 titels.append(title_up2)
@@ -529,21 +530,46 @@ def one_hot_self_check(model=None,data_info=None,thickness=1e-4,extend=10):
                 x_labels = []
                 for index in range(data_info.class_num):
                     seg_mean = np.mean(seg[0, :, :, index])
-                    x_labels.append(str(format(y_p[0,index],'.2e'))+'/'+str(round(seg_mean,2))+'/'+str(round(y[i,index],2)))
+                    x_labels.append(str(y[i,index]) +'/'+ str(format(y_p[0,index],'.2e'))+'/'+str(round(seg_mean,3)) )
 
                 labels2DShow(img=x[i],labels=seg[0],data_info=data_info,titels=titels, show=False,
-                             x_labels=x_labels,save_path=data_info.ont_hot_check_save_path)
+                             x_labels=x_labels,save_path=data_info.one_hot_check_save_path)
 
         print 'check '+str(k) + ' imgs...'
         print
         if k >= data_info.val_img_num * extend:
             print 'self check finish'
-            print 'bg img are ' + str(bg_num)
             break
 
 
-def predict_2Dlabel_datas_self_check(data_info=None, generator=None,thickness=1e-5):  # produce one time and save in mem, maybe for fit
-    extend = data_info.train_data_extend
+def plot_big_loss_edge(loss=None,label=None,index=0,data_info=None):
+    avg_p = 1.0 / data_info.class_num
+    median_th = data_info.median_th
+
+    label_avg = np.mean(label.copy(),2)
+
+    for i in range(data_info.IMG_ROW_OUT):
+        for j in range(data_info.IMG_COL_OUT):
+
+            object = label[i, j, index]
+            if data_info.class_num == 2:
+                median = min(label[i, j])
+            else:
+                median = np.median(label[i, j])
+
+            if object > avg_p * 2 and median < avg_p /2:  # 肯定是object，但包括错认
+                if loss[i, j] > 0.2:
+                    label_avg[i,j] = 1.0
+
+            elif loss[i, j] > np.log(data_info.class_num) * 1.2:
+                    label_avg[i,j] = 1.0
+
+    return label
+
+
+def predict_2Dlabel_datas_self_check(model=None,data_info=None, generator=None,thickness=1e-9):  # produce one time and save in mem, maybe for fit
+    #extend = data_info.train_data_extend
+    extend  = 1
     x_val = np.zeros((data_info.train_img_num * extend, data_info.IMG_ROW, data_info.IMG_COL, 3), dtype=np.float32)
     y_val = np.zeros((data_info.train_img_num * extend, data_info.class_num), dtype=np.float32)
     labsBuf = np.zeros((data_info.train_img_num * extend, data_info.IMG_ROW_OUT, data_info.IMG_COL_OUT, data_info.class_num),
@@ -565,59 +591,68 @@ def predict_2Dlabel_datas_self_check(data_info=None, generator=None,thickness=1e
             #    x[i] = enhance_by_random(x=x[i], data_info=data_info)
 
             img = np.expand_dims(x[i], axis=0)
-            y_p,label_vect = data_info.model.predict(img)
+            y_p,seg = model.predict(img)
+            print
+            print 'main out y_true/y_pred:'
+            print y[i]
+            print y_p[0]
+            print 'main out loss:'
+            print (cce_loss(y_true=y[i], y_pred=y_p[0], data_info=data_info))
 
             if data_info.class_name_dic_t[index] == 'bg':  # 抑制背景，效果还不错，也够简单
                 label = np.zeros((data_info.IMG_ROW_OUT, data_info.IMG_COL_OUT,data_info.class_num),dtype=np.float32)
                 label[:,:,:] = avg_p
             else:
-                label_cp = label_vect[0].copy()
-                label = strengthen_method_median_power_tristate(label=label_cp,index=index,data_info=data_info)
+                label= seg[0].copy()
+                label = strengthen_method_median_power_tristate(label=label,index=index,data_info=data_info)
 
             labsBuf[k] = label
             x_val[k] = x[i]
             y_val[k] = y[i]
             k += 1
 
-            if data_info.step_check:
-                #print 'index of 2D_label after strengthen_method...'
-                #print label_vect[0, data_info.IMG_ROW_OUT / 2, :, index]
-                #if index != 0:
-                #    print label_vect[0, data_info.IMG_ROW_OUT / 2, :, index-1]
-                labels2DShow(img=x_val[k-1], labels=labsBuf[k-1], data_info=data_info)
-
-                #print 'start val ....'
-                #print(type(x), x.shape, x.dtype, np.min(x), np.max(x))
-                #print(type(y_p), y_p.shape, y_p.dtype, np.min(y_p), np.max(y_p))
-                #print(type(labsBuf), labsBuf.shape, labsBuf.dtype, np.min(labsBuf), np.max(labsBuf))
-
-            loss = mean_CCE_loss(y_true=label, y_pred=label_vect[0],data_info=data_info)
-
-            print
-            print y[i]
-            print y_p
+            loss = cce_loss(y_true=label, y_pred=seg[0],data_info=data_info)
+            print 'seg_out loss min/max:'
             print(type(loss), loss.shape, loss.dtype, np.min(loss), np.max(loss))
-            print loss[data_info.IMG_ROW_OUT / 2, :]
+            print 'loss max:'
+            max_index = np.where(loss == np.max(loss))
+            print max_index
+            max_i= max_index[0][0]
+            max_j = max_index[1][0]
+
+            print max_i,max_j
+            print 'seg:'
+            print seg[0, max_i, max_j]
+            print 'label:'
+            print label[ max_i, max_j]
+
+            #seg[0,max_i:max_i+2,max_j:max_j+2,:]=1.0
             loss_m = np.mean(loss)
             print 'loss mean: ' + str(loss_m)
 
+            print 'seg center:'
+            print seg[0, data_info.IMG_ROW_OUT / 2, data_info.IMG_COL_OUT / 2]
+            print 'loss center:'
+            print loss[data_info.IMG_ROW_OUT / 2, data_info.IMG_COL_OUT / 2]
+
+            print 'after infer label center:'
+            print label[data_info.IMG_ROW_OUT / 2, data_info.IMG_COL_OUT / 2]
+
             titels = []
-            #title_up1 = 'boost_one_hot: ' + 'sigmoid_BCE'
-            title_up1 = 'boost: ' + 'softmax_ccs'
-            title_up2 = 'm_o/m_l'
-            title_down = 'ccs_loss: ' + str(format(loss_m, '.3e'))
+            title_up1 = 'boost'
+            title_up2 = 'y_true/y_pred/GlobAve'
+            title_down = 'seg_out_loss: ' + str(format(loss_m, '.3e'))
             titels.append(title_up1)
             titels.append(title_up2)
             titels.append(title_down)
-            print label_vect[0, data_info.IMG_ROW_OUT / 2, :, index]
 
             x_labels = []
-            for i_ch in range(data_info.class_num):
-                x_labels.append( str(round(y_p[0, i_ch], 3)) + '/' + str(round(y[i, i_ch], 3)))
-                #+ str(round(loss[i_ch], 3)))
+            for index in range(data_info.class_num):
+                seg_mean = np.mean(seg[0, :, :, index])
+                x_labels.append(
+                    str(y[i, index]) + '/' + str(format(y_p[0, index], '.2e')) + '/' + str(round(seg_mean, 3)))
 
-
-            labels2DShow_boost(img=x[i], labels=label, seg=label_vect[0], data_info=data_info, titels=titels, show=False,
+            labels2DShow_boost(img=x[i], seg=seg[0],labels=label, data_info=data_info, titels=titels, show=False,
                          x_labels=x_labels, save_path=data_info.boost_self_check_save_path)
 
             if k == data_info.train_img_num * extend:
@@ -742,15 +777,15 @@ def train_generator_clearbg(data_info=None):
             if data_info.class_name_dic_t[index] == 'bg':
                 y[i, :] = avg_p
 
-            if k < length:
+            if data_info.val_full is False:
                 data_info.one_hot_x_val[k] = x[i]
                 data_info.one_hot_y_val[k] = y[i]
                 k += 1
-            if k == length:
-                k += 1
-                print(type(data_info.one_hot_x_val), data_info.one_hot_x_val.shape,
-                      data_info.one_hot_x_val.dtype, np.min(data_info.one_hot_x_val),
-                      np.max(data_info.one_hot_x_val))
+                if k == length:
+                    data_info.val_full = True
+                    print(type(data_info.one_hot_x_val), data_info.one_hot_x_val.shape,
+                          data_info.one_hot_x_val.dtype, np.min(data_info.one_hot_x_val),
+                          np.max(data_info.one_hot_x_val))
         yield (x, y)
 
 
@@ -871,7 +906,6 @@ def labels2DShow_boost(img=None, labels=None,seg=None, data_info=None,show=True,
         ax.imshow(label)
 
         ax = plt.subplot(2, n, n + i + 1)
-        ax.set_title(x_labels[i], fontsize=12)
         # ax.get_xaxis().set_visible(False)
         # ax.get_yaxis().set_visible(False)
         label = labels[:, :, i]
@@ -944,8 +978,21 @@ def strengthen_method_median_power_tristate_pass(label=None,index=0,data_info=No
                 label[i, j, :] = 0.5 # 3态0.5 或 2态0.0
     return label
 
-def strengthen_method_median_power_tristate(label=None,index=0,data_info=None): #label[:,:,index]
+
+def cce_loss_no_tf(y_true=None, y_pred=None,data_info=None):
+    #logits_scaled = tf.nn.softmax(logits)
+    y_pred = tf.convert_to_tensor(y_pred, dtype=np.float32)
+    y_true = tf.convert_to_tensor(y_true, dtype=np.float32)
+    ret = K.categorical_crossentropy(y_true, y_pred)
+
+    ret = (data_info.sess.run(ret))
+
+    return ret
+
+def strengthen_method_median_power_tristate(label=None,index=0,data_info=None):
     avg_p = 1.0 / data_info.class_num
+    median_th = data_info.median_th
+
     for i in range(data_info.IMG_ROW_OUT):
         for j in range(data_info.IMG_COL_OUT):
             object = label[i,j,index]
@@ -954,13 +1001,17 @@ def strengthen_method_median_power_tristate(label=None,index=0,data_info=None): 
             else:
                 median = np.median(label[i, j])
 
-            #if object > avg_p * 2 and median < avg_p / 2:   #永远不改
-            if median < avg_p * 1e-4:  # 永远不改
+            if object > 0.8 : #完全正确的object
 
                 label[i, j, :] = 0.0
                 label[i, j, index] = 1.0
+
+            elif median < avg_p * median_th:  # 肯定是object，但包括错认
+
+                label[i, j, :] = 0.0
+                label[i, j, index] = 1.0
+
             else:
-                #label[i, j, :] = 0.5  # 3态0.5 或 2态0.0
                 label[i, j, :] = avg_p
 
     return label

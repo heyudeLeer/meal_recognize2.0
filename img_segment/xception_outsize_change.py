@@ -48,8 +48,7 @@ def Xception(include_top=True,
              input_tensor=None,
              input_shape=None,
              pooling=None,
-             DIVx = 1,
-             classes=1000,
+             classes=1000,Div = 8,
              **kwargs):
     """Instantiates the Xception architecture.
 
@@ -100,6 +99,11 @@ def Xception(include_top=True,
             backend that does not support separable convolutions.
     """
     #backend, layers, models, keras_utils = get_submodules_from_kwargs(kwargs)
+
+    if Div == 8:
+        strides1 = 1
+    elif Div == 16:
+        strides1 = 2
 
     if not (weights in {'imagenet', None} or os.path.exists(weights)):
         raise ValueError('The `weights` argument should be either '
@@ -185,7 +189,7 @@ def Xception(include_top=True,
     x = layers.Activation('relu', name='block4_sepconv2_act')(x)
     x = layers.SeparableConv2D(728, (3, 3), strides=(1, 1),padding='same', use_bias=False, name='block4_sepconv2')(x)
     x = layers.BatchNormalization(name='block4_sepconv2_bn')(x)
-    x = layers.MaxPooling2D((3, 3), strides=(2, 2), padding='same', name='block4_pool')(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='block4_pool')(x)
     x = layers.add([x, residual])
 
     for i in range(8):
@@ -204,7 +208,7 @@ def Xception(include_top=True,
 
         x = layers.add([x, residual],name=prefix + '_add')
 
-    residual = layers.Conv2D(1024, (1, 1), strides=(1, 1),
+    residual = layers.Conv2D(1024, (1, 1), strides=(strides1, strides1),
                       padding='same', use_bias=False)(x)
     residual = layers.BatchNormalization()(residual)
 
@@ -214,7 +218,10 @@ def Xception(include_top=True,
     x = layers.Activation('relu', name='block13_sepconv2_act')(x)
     x = layers.SeparableConv2D(1024, (3, 3), strides=(1, 1),padding='same', use_bias=False, name='block13_sepconv2')(x)
     x = layers.BatchNormalization(name='block13_sepconv2_bn')(x)
-    x = layers.MaxPooling2D((1, 1), strides=(1, 1), padding='same', name='block13_pool')(x)
+    if strides1==1:
+        x = layers.MaxPooling2D((1, 1), strides=(1, 1), padding='same', name='block13_pool')(x)
+    else:
+        x = layers.MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='block13_pool')(x)
 
     x = layers.add([x, residual],name='block13_add')
 
