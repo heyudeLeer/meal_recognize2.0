@@ -176,7 +176,7 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
         print 'boost froze' + layer.name
         if layer.name == 'block6_add':  # block6_add:GPU8
             break
-    data_info.batch_size_GPU = 8
+    data_info.batch_size_GPU = 6
     data_label.get_data_info(data_set_path=data_set_path, data_info=data_info)
 
     data_gen = data_label.train_generator_clearbg(data_info=data_info)  # data_info.train_generator
@@ -223,7 +223,7 @@ def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None
         print 'boost froze' + layer.name
         if layer.name == 'block6_add':  # block6_add:GPU8
             break
-    data_info.batch_size_GPU = 8
+    data_info.batch_size_GPU = 6
     data_label.get_data_info(data_set_path=data_set_path, data_info=data_info)
 
     model.compile(
@@ -246,7 +246,7 @@ def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None
         print 'boost froze' + layer.name
         if layer.name =='block12_add':# 'block12_sepconv2_act': # 'block12_add':  # block6_add:GPU8
             break
-    data_info.batch_size_GPU = 12
+    data_info.batch_size_GPU = 10
     data_label.get_data_info(data_set_path=data_set_path, data_info=data_info)
 
     boost_generator = data_label.predict_2Dlabel_generator(data_info=data_info)

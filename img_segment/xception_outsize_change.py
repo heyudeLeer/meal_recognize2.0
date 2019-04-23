@@ -161,9 +161,9 @@ def Xception(include_top=True,
     x = layers.SeparableConv2D(128, (3, 3), padding='same', use_bias=False, name='block2_sepconv1')(x)
     x = layers.BatchNormalization(name='block2_sepconv1_bn')(x)
     x = layers.Activation('relu', name='block2_sepconv2_act')(x)
-    x = layers.SeparableConv2D(128, (3, 3), strides=(2, 2),padding='same', use_bias=False, name='block2_sepconv2')(x)
+    x = layers.SeparableConv2D(128, (3, 3), strides=(1, 1),padding='same', use_bias=False, name='block2_sepconv2')(x)
     x = layers.BatchNormalization(name='block2_sepconv2_bn')(x)
-    x = layers.MaxPooling2D((1, 1), strides=(1, 1), padding='same', name='block2_pool')(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='block2_pool')(x)
     x = layers.add([x, residual])
 
     residual = layers.Conv2D(256, (1, 1), strides=(2, 2),
@@ -174,9 +174,9 @@ def Xception(include_top=True,
     x = layers.SeparableConv2D(256, (3, 3), padding='same', use_bias=False, name='block3_sepconv1')(x)
     x = layers.BatchNormalization(name='block3_sepconv1_bn')(x)
     x = layers.Activation('relu', name='block3_sepconv2_act')(x)
-    x = layers.SeparableConv2D(256, (3, 3), strides=(2, 2),padding='same', use_bias=False, name='block3_sepconv2')(x)
+    x = layers.SeparableConv2D(256, (3, 3), strides=(1, 1),padding='same', use_bias=False, name='block3_sepconv2')(x)
     x = layers.BatchNormalization(name='block3_sepconv2_bn')(x)
-    x = layers.MaxPooling2D((1, 1), strides=(1, 1), padding='same', name='block3_pool')(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='block3_pool')(x)
     x = layers.add([x, residual])
 
     residual = layers.Conv2D(728, (1, 1), strides=(2, 2),

@@ -115,7 +115,7 @@ class DataInfo:
             self.IMG_ROW_OUT = self.IMG_ROW / 8
             self.IMG_COL_OUT = self.IMG_COL / 8
             self.REDUCE_TIME = 3
-            self.batch_size_GPU = 3
+            self.batch_size_GPU = 2
 
 
         else:
