@@ -51,9 +51,9 @@ def creatXception(data_info=None,upsample=False):
 
         x = base_model.output
         x = UpSampling2D((2, 2))(x)
-        x = SeparableConv2D(2048, (3, 3), use_bias=False, padding='same', name='up_conv1')(x)
-        x = BatchNormalization(name='up_conv1_bn')(x)
-        x = Activation('relu', name='up_conv1_act')(x)
+        #x = SeparableConv2D(2048, (3, 3), use_bias=False, padding='same', name='up_conv1')(x)
+        #x = BatchNormalization(name='up_conv1_bn')(x)
+        #x = Activation('relu', name='up_conv1_act')(x)
         x = keras.layers.concatenate([x, base_model.get_layer('block13_sepconv2_act').output])
         x = SeparableConv2D(3072, (3, 3), use_bias=False, padding='same', name='up_conv2')(x)
         x = BatchNormalization(name='up_conv2_bn')(x)
@@ -82,8 +82,8 @@ def train_model(data_set_path=None, data_info=None):
     # one_hot
     model = creatXception(data_info)
     weight_file = data_set_path + '/predictInfo/pixel_level'+str(data_info.pixel_level) + '/one_hot_softmax' + '.hdf5'
-    model = one_hot(data_set_path=data_set_path, model=model, weight_file=weight_file, data_info=data_info)
-    #model.load_weights(weight_file)
+    #model = one_hot(data_set_path=data_set_path, model=model, weight_file=weight_file, data_info=data_info)
+    model.load_weights(weight_file)
     if data_info.one_hot_check is False:
         data_label.one_hot_self_check(model=model, data_info=data_info, extend=1, thickness=1e-9)
 
@@ -95,8 +95,8 @@ def train_model(data_set_path=None, data_info=None):
     model = creatXception(data_info)
     model.load_weights(weight_file)
     weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/one_hot_boost.hdf5'
-    model = boost_one_hot(model=model,data_set_path=data_set_path, data_info=data_info,weight_file=weight_file)
-    #model.load_weights(weight_file)
+    #model = boost_one_hot(model=model,data_set_path=data_set_path, data_info=data_info,weight_file=weight_file)
+    model.load_weights(weight_file)
     del data_info.model
 
     boost_again=False
@@ -114,12 +114,12 @@ def train_model(data_set_path=None, data_info=None):
             data_label.predict_2Dlabel_datas_self_check(model=model,data_info=data_info, generator=data_info.train_generator)
 
     #U-net-based
-    robust = False
+    robust = True
     if robust is True:
         # one_hot + up
         data_info.model = model
         data_info.base_model_weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/base_model.hdf5'
-        #data_info.base_model.save_weights(data_info.base_model_weight_file)
+        data_info.base_model.save_weights(data_info.base_model_weight_file)
 
         model = creatXception(data_info,upsample=True)
         weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/robust.hdf5'
