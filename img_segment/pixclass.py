@@ -10,6 +10,7 @@ from time import sleep, time
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import cv2
+import datetime
 
 import train
 import predic
@@ -51,6 +52,17 @@ class DataInfo:
         self.boost_label_val = None
         self.val_full = False
         self.median_th = 1e-4
+        self.train_abs_loss_sum = 0.0
+        self.loss_tabel=None
+        self.sample_loss=0.0
+        self.contour=None
+        self.img_contour=None
+        self.contour_title=None
+        self.boost_finish=False
+
+        self.big_loss_x = None
+        self.big_loss_y = None
+        self.big_loss_len = 0
 
                            #brightness_range, color_range, contrast_range, sharpness_range
         self.enhance_par = [  (0.75, 1.15),      (0.8, 1.4),  (0.8, 1.4),    (0.8, 1.4)]
@@ -78,6 +90,12 @@ class DataInfo:
         self.val_datas = None
         self.model = None
         self.val_2Dlabel=None
+        self.avg_class_num = 0.0
+        self.avg_cce_loss = 0.0
+        self.one_hot_var = 0.0
+        self.contour_pixels = 0
+        self.err_object=0.0
+
         self.object_pixels_avg = []
         self.object_area_avg = []
         self.threshold_value=131
@@ -213,9 +231,11 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
     with tf.Session() as sess:
         dataInfo.sess = sess
 
+    nowTime = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')  # 现在
+
     if dataInfo.one_hot_check is True:
         # save self_check err imgs in the data_set_path
-        self_check_path = data_set_path + '/predictInfo/pixel_level' + str(pixel_level) + '/self_check/one_hot'
+        self_check_path = data_set_path + '/predictInfo/pixel_level' + str(pixel_level) + '/self_check/one_hot/'+nowTime
         isExists = os.path.exists(self_check_path)
         if not isExists:
             os.makedirs(self_check_path)
@@ -223,7 +243,7 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
         dataInfo.one_hot_check_save_path = self_check_path
     if dataInfo.boost_self_check is True:
         # save self_check err imgs in the data_set_path
-        self_check_path = data_set_path + '/predictInfo/pixel_level' + str(pixel_level) + '/self_check/one_hot_boost'
+        self_check_path = data_set_path + '/predictInfo/pixel_level' + str(pixel_level) + '/self_check/one_hot_boost/'+nowTime
         isExists = os.path.exists(self_check_path)
         if not isExists:
             os.makedirs(self_check_path)

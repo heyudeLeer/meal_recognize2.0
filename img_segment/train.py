@@ -51,9 +51,9 @@ def creatXception(data_info=None,upsample=False):
 
         x = base_model.output
         x = UpSampling2D((2, 2))(x)
-        #x = SeparableConv2D(2048, (3, 3), use_bias=False, padding='same', name='up_conv1')(x)
-        #x = BatchNormalization(name='up_conv1_bn')(x)
-        #x = Activation('relu', name='up_conv1_act')(x)
+        x = SeparableConv2D(2048, (3, 3), use_bias=False, padding='same', name='up_conv1')(x)
+        x = BatchNormalization(name='up_conv1_bn')(x)
+        x = Activation('relu', name='up_conv1_act')(x)
         x = keras.layers.concatenate([x, base_model.get_layer('block13_sepconv2_act').output])
         x = SeparableConv2D(3072, (3, 3), use_bias=False, padding='same', name='up_conv2')(x)
         x = BatchNormalization(name='up_conv2_bn')(x)
@@ -81,37 +81,33 @@ def train_model(data_set_path=None, data_info=None):
 
     # one_hot
     model = creatXception(data_info)
+    if data_info.one_hot_check is False:
+        data_label.one_hot_seg(model=model, data_info=data_info, extend=1, thickness=1e-9)
     weight_file = data_set_path + '/predictInfo/pixel_level'+str(data_info.pixel_level) + '/one_hot_softmax' + '.hdf5'
     #model = one_hot(data_set_path=data_set_path, model=model, weight_file=weight_file, data_info=data_info)
     model.load_weights(weight_file)
-    if data_info.one_hot_check is False:
-        data_label.one_hot_self_check(model=model, data_info=data_info, extend=1, thickness=1e-9)
 
+
+    if data_info.one_hot_check is False:
+        data_label.one_hot_seg(model=model, data_info=data_info, extend=1, thickness=1e-9)
+        return model
     if data_info.boost_self_check is False:
-        data_label.predict_2Dlabel_datas_self_check(model=model, data_info=data_info,
+        data_label.seg_label(model=model, data_info=data_info,
                                                     generator=data_info.train_generator)
     # boost one_hot
-    data_info.model = model
-    model = creatXception(data_info)
-    model.load_weights(weight_file)
-    weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/one_hot_boost.hdf5'
-    #model = boost_one_hot(model=model,data_set_path=data_set_path, data_info=data_info,weight_file=weight_file)
-    model.load_weights(weight_file)
-    del data_info.model
-
-    boost_again=False
-    if boost_again is True:
+    boost = False
+    if boost is True:
         data_info.model = model
         model = creatXception(data_info)
         model.load_weights(weight_file)
-        weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/one_hot_boost2.hdf5'
-        epoch = (2,1)
-        model = boost_one_hot(model=model,data_set_path=data_set_path, data_info=data_info,weight_file=weight_file,epoch=epoch)
+        weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/one_hot_boost.hdf5'
+        #model = boost_one_hot(model=model,data_set_path=data_set_path, data_info=data_info,weight_file=weight_file)
+        model = simple_boost(model=model,data_set_path=data_set_path, data_info=data_info,weight_file=weight_file)
         #model.load_weights(weight_file)
-        del data_info.model
 
-        if data_info.boost_self_check is True:
-            data_label.predict_2Dlabel_datas_self_check(model=model,data_info=data_info, generator=data_info.train_generator)
+        #model.load_weights('boost1.hdf5')
+        #data_label.seg_label_now(model=model, data_info=data_info, part=1)
+        del data_info.model
 
     #U-net-based
     robust = True
@@ -129,6 +125,70 @@ def train_model(data_set_path=None, data_info=None):
 
     print '.....trian finish......'
     return model
+
+
+class my_call_back(keras.callbacks.Callback):
+
+    def __init__(self,data_info=None):
+        self.data_info = data_info
+        self.index = 0
+        self.err_pixels = 10000
+        self.patience=1
+        self.weights_file=None
+        self.best_weights_file='best_boost_weights.hdf5'
+
+
+    def on_train_begin(self, logs=None):
+        print 'train begin'
+
+    def on_epoch_begin(self, epoch=None, logs=None):
+        print 'epoch begin'
+
+    def on_epoch_end(self, epoch=None, logs=None):
+        print 'epoch end'
+
+        if epoch == -1: # 实验发现，单独训练big_loss_sample并没有明显效果
+            #early_stopping = EarlyStopping(monitor='val_loss', patience=1, min_delta=5e-5)
+            len = self.data_info.big_loss_len - 1
+            x = self.data_info.big_loss_x[:len]
+            y = self.data_info.big_loss_y[:len]
+            self.model.fit(x=x,y=y, batch_size=self.data_info.batch_size_GPU, epochs=5, verbose=1,
+                           #validation_data=(x,y),callbacks=[early_stopping]
+                           )
+            self.model.stop_training = False
+
+        #print 'train_abs_loss_sum:' + str(self.data_info.train_abs_loss_sum)
+        print 'contour_pixels:' + str(self.data_info.contour_pixels)
+        print 'data_info.err_object:' + str(self.data_info.err_object)
+        if self.data_info.err_object < self.err_pixels:
+            self.patience = 1
+            self.data_info.model.save_weights(self.best_weights_file)
+
+            self.index += 1
+            self.weights_file = 'boost' + str(self.index) + '.hdf5'
+            self.model.save_weights(self.weights_file)
+            self.data_info.model.load_weights(self.weights_file)
+            print 'update weights...'
+
+            if self.data_info.err_object < 20:
+                self.patience = 0
+                self.boost_finish = True
+            elif self.data_info.err_object > self.err_pixels-10:
+                self.patience -= 1
+            self.err_pixels = self.data_info.err_object
+
+        else:
+            self.patience -= 1
+
+        if self.patience == 0:
+            print 'err_pixels no reduce in patiences!'
+            self.model.stop_training = True
+            self.model.load_weights(self.best_weights_file)
+            self.patience = 2
+
+        #self.data_info.train_abs_loss_sum = 0
+        self.data_info.contour_pixels = 0
+        self.data_info.err_object = 0
 
 
 def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
@@ -157,10 +217,11 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
     loss=loss,
     metrics=[keras.metrics.categorical_accuracy]
     )
-    model.summary()
+    #model.summary()
+
     model.fit_generator(
         generator=data_gen,
-        epochs=8,
+        epochs=6,
         steps_per_epoch=data_info.steps_per_epoch,
         #workers=data_info.cpus,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
         #validation_data=data_info.val_datas,#data_info.val_generator,
@@ -189,7 +250,7 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
         loss=loss,
         metrics=[keras.metrics.categorical_accuracy]
     )
-    model.summary()
+    #model.summary()
     model.fit_generator(
         generator=data_gen,
         epochs=10,
@@ -204,19 +265,17 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
     return model
 
 
-def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None,epoch=(3,2)):
+def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None,epoch=(10,10)):
 
     opt = keras.optimizers.rmsprop(lr=0.0001, decay=1e-6)  # 'rmsprop' #
     loss = {'seg_out': 'categorical_crossentropy'}
-    early_stopping = EarlyStopping(monitor='val_loss', patience=1, min_delta=3e-5)
-    checkpoint = ModelCheckpoint(weight_file, monitor='val_loss', verbose=2, save_best_only=True,save_weights_only=True)
+    #data_info.label_mode = 2
+    #loss = {'main_out': 'categorical_crossentropy', 'seg_out': 'categorical_crossentropy'}
+    #loss_weights = {'main_out': 1.0, 'seg_out': 1.0}
+    #early_stopping = EarlyStopping(monitor='val_loss', patience=1, min_delta=3e-5)
+    #checkpoint = ModelCheckpoint(weight_file, monitor='val_loss', verbose=2, save_best_only=True,save_weights_only=True)
 
     #data_info.start_get_val = True
-
-    boost_generator = data_label.predict_2Dlabel_generator(data_info=data_info)
-    boost_generator.next()
-    # 偶尔必须空跑一次，否则 ValueError: Tensor Tensor('main_out/Softmax:0', shape=(?, 24), dtype=float32) is not an element of this graph.
-    # 很重要，但不明白
 
     for layer in model.layers[:]:
         layer.trainable = False
@@ -226,18 +285,32 @@ def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None
     data_info.batch_size_GPU = 6
     data_label.get_data_info(data_set_path=data_set_path, data_info=data_info)
 
+    boost_generator = data_label.predict_2Dlabel_generator(data_info=data_info)
+    boost_generator.next()
+    # 偶尔必须空跑一次，否则 ValueError: Tensor Tensor('main_out/Softmax:0', shape=(?, 24), dtype=float32) is not an element of this graph.
+    # 很重要，但不明白
+
     model.compile(
         optimizer=opt,
         loss=loss,
+        #loss_weights=loss_weights,
         metrics=[keras.metrics.categorical_accuracy]
     )
-    model.summary()
+    #model.summary()
+
+    epoch_end = my_call_back(data_info=data_info)
+
     model.fit_generator(
         generator=boost_generator,
-        steps_per_epoch=data_info.steps_per_epoch,
+        steps_per_epoch=data_info.steps_per_epoch/2,
         epochs=epoch[0],
+        callbacks=[epoch_end]
     )
     del boost_generator
+
+    if data_info.boost_finish is True:
+        model.save_weights(weight_file)
+        return model
 
     # fine tuning and val
     #data_info.enhance_enable = False
@@ -255,13 +328,92 @@ def boost_one_hot(data_set_path=None, data_info=None,weight_file=None,model=None
     model.compile(
         optimizer=opt,
         loss=loss,
+        #loss_weights=loss_weights,
         metrics=[keras.metrics.categorical_accuracy]
     )
-    model.summary()
+    #model.summary()
+    model.fit_generator(
+        generator=boost_generator,
+        steps_per_epoch=data_info.steps_per_epoch/2,
+        epochs=epoch[1],
+        #validation_data=(data_info.boost_x_val, data_info.boost_label_val),
+        #callbacks=[checkpoint, early_stopping]
+        callbacks=[epoch_end]
+    )
+    model.save_weights(weight_file)
+    del boost_generator
+
+    return model
+
+
+def simple_boost(data_set_path=None, data_info=None,weight_file=None,model=None,epoch=(10,10)):
+
+    opt = keras.optimizers.rmsprop(lr=0.0001, decay=1e-6)  # 'rmsprop' #
+    loss = {'seg_out': 'categorical_crossentropy'}
+    #data_info.label_mode = 2
+    #loss = {'main_out': 'categorical_crossentropy', 'seg_out': 'categorical_crossentropy'}
+    #loss_weights = {'main_out': 1.0, 'seg_out': 1.0}
+    #early_stopping = EarlyStopping(monitor='val_loss', patience=1, min_delta=3e-5)
+    #checkpoint = ModelCheckpoint(weight_file, monitor='val_loss', verbose=2, save_best_only=True,save_weights_only=True)
+
+    #data_info.start_get_val = True
+
+    for layer in model.layers[:]:
+        layer.trainable = False
+        print 'boost froze' + layer.name
+        if layer.name == 'block6_add':  # block6_add:GPU8
+            break
+    data_info.batch_size_GPU = 6
+    data_label.get_data_info(data_set_path=data_set_path, data_info=data_info)
+
+    boost_generator = data_label.predict_2Dlabel_generator(data_info=data_info)
+    boost_generator.next()
+    # 偶尔必须空跑一次，否则 ValueError: Tensor Tensor('main_out/Softmax:0', shape=(?, 24), dtype=float32) is not an element of this graph.
+    # 很重要，但不明白
+
+    model.compile(
+        optimizer=opt,
+        loss=loss,
+        #loss_weights=loss_weights,
+        metrics=[keras.metrics.categorical_accuracy]
+    )
+    #model.summary()
+
     model.fit_generator(
         generator=boost_generator,
         steps_per_epoch=data_info.steps_per_epoch,
-        epochs=epoch[1],
+        epochs=1,
+    )
+    del boost_generator
+
+    if data_info.boost_finish is True:
+        model.save_weights(weight_file)
+        return model
+
+    # fine tuning and val
+    #data_info.enhance_enable = False
+    for layer in model.layers[:]:
+        layer.trainable = False
+        print 'boost froze' + layer.name
+        if layer.name =='block12_add':# 'block12_sepconv2_act': # 'block12_add':  # block6_add:GPU8
+            break
+    data_info.batch_size_GPU = 10
+    data_label.get_data_info(data_set_path=data_set_path, data_info=data_info)
+
+    boost_generator = data_label.predict_2Dlabel_generator(data_info=data_info)
+    #boost_generator.next()
+
+    model.compile(
+        optimizer=opt,
+        loss=loss,
+        #loss_weights=loss_weights,
+        metrics=[keras.metrics.categorical_accuracy]
+    )
+    #model.summary()
+    model.fit_generator(
+        generator=boost_generator,
+        steps_per_epoch=data_info.steps_per_epoch,
+        epochs=1,
         #validation_data=(data_info.boost_x_val, data_info.boost_label_val),
         #callbacks=[checkpoint, early_stopping]
     )
@@ -294,15 +446,17 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
         loss=loss,
         metrics=[keras.metrics.categorical_accuracy]
     )
-    model.summary()
+    #model.summary()
     model.fit_generator(
         generator=data_gen,
-        epochs=3,
         steps_per_epoch=data_info.steps_per_epoch,
+        epochs=2,
     )
     del data_gen
 
     loss = {'seg_out': 'categorical_crossentropy'}
+    #loss = {'main_out': 'categorical_crossentropy', 'seg_out': 'categorical_crossentropy'}
+    #loss_weights = {'main_out': 1.0, 'seg_out': 1.0}
     boost_generator = data_label.predict_2Dlabel_generator(data_info=data_info)
     boost_generator.next()
     # 偶尔必须空跑一次，否则 ValueError: Tensor Tensor('main_out/Softmax:0', shape=(?, 24), dtype=float32) is not an element of this graph.
@@ -311,13 +465,14 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     model.compile(
         optimizer=opt,
         loss=loss,
+        #loss_weights=loss_weights,
         metrics=[keras.metrics.categorical_accuracy]
     )
-    model.summary()
+    #model.summary()
     model.fit_generator(
         generator=boost_generator,
         steps_per_epoch=data_info.steps_per_epoch,
-        epochs=3,
+        epochs=2,
     )
     del boost_generator
 
@@ -336,13 +491,14 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     model.compile(
         optimizer=opt,
         loss=loss,
+        #loss_weights=loss_weights,
         metrics=[keras.metrics.categorical_accuracy]
     )
-    model.summary()
+    #model.summary()
     model.fit_generator(
         generator=boost_generator,
         steps_per_epoch=data_info.steps_per_epoch,
-        epochs=2,
+        epochs=1,
         #validation_data=(data_info.boost_x_val, data_info.boost_label_val),
         #callbacks=[checkpoint, early_stopping]
     )
@@ -474,7 +630,7 @@ def boost_one_hot_1by1(data_set_path=None, model=None, weight_file=None, data_in
 
         if data_info.boost_self_check:
             model.load_weights(filepath=weight_file)
-            x, y = data_label.predict_2Dlabel_datas_self_check(data_info=data_info,generator=data_info.train_generator)
+            x, y = data_label.seg_label(data_info=data_info,generator=data_info.train_generator)
         else:
             x, y = data_label.predict_2Dlabel_datas_no_check(data_info=data_info,generator=data_info.train_generator)
 
