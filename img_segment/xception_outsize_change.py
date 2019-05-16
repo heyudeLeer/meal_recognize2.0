@@ -100,10 +100,14 @@ def Xception(include_top=True,
     """
     #backend, layers, models, keras_utils = get_submodules_from_kwargs(kwargs)
 
-    if Div == 8:
-        strides1 = 1
-    elif Div == 16:
+    strides1 = 1
+    strides2 = 1
+
+    if Div == 16:
         strides1 = 2
+    elif Div==32:
+        strides1 = 2
+        strides2 = 2
 
     if not (weights in {'imagenet', None} or os.path.exists(weights)):
         raise ValueError('The `weights` argument should be either '
@@ -148,7 +152,7 @@ def Xception(include_top=True,
         else:
             img_input = input_tensor
 
-    x = layers.Conv2D(32, (3, 3), strides=(1, 1), use_bias=False, padding='same', name='block1_conv1')(img_input)
+    x = layers.Conv2D(32, (3, 3), strides=(strides2, strides2), use_bias=False, padding='same', name='block1_conv1')(img_input)
     x = layers.BatchNormalization(name='block1_conv1_bn')(x)
     x = layers.Activation('relu', name='block1_conv1_act')(x)
     x = layers.Conv2D(64, (3, 3), use_bias=False, padding='same', name='block1_conv2')(x)
@@ -166,8 +170,7 @@ def Xception(include_top=True,
     x = layers.MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='block2_pool')(x)
     x = layers.add([x, residual])
 
-    residual = layers.Conv2D(256, (1, 1), strides=(2, 2),
-                      padding='same', use_bias=False)(x)
+    residual = layers.Conv2D(256, (1, 1), strides=(2, 2),padding='same', use_bias=False)(x)
     residual = layers.BatchNormalization()(residual)
 
     x = layers.Activation('relu', name='block3_sepconv1_act')(x)
@@ -179,8 +182,7 @@ def Xception(include_top=True,
     x = layers.MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='block3_pool')(x)
     x = layers.add([x, residual])
 
-    residual = layers.Conv2D(728, (1, 1), strides=(2, 2),
-                      padding='same', use_bias=False)(x)
+    residual = layers.Conv2D(728, (1, 1), strides=(2, 2),padding='same', use_bias=False)(x)
     residual = layers.BatchNormalization()(residual)
 
     x = layers.Activation('relu', name='block4_sepconv1_act')(x)
@@ -208,8 +210,7 @@ def Xception(include_top=True,
 
         x = layers.add([x, residual],name=prefix + '_add')
 
-    residual = layers.Conv2D(1024, (1, 1), strides=(strides1, strides1),
-                      padding='same', use_bias=False)(x)
+    residual = layers.Conv2D(1024, (1, 1), strides=(strides1, strides1),padding='same', use_bias=False)(x)
     residual = layers.BatchNormalization()(residual)
 
     x = layers.Activation('relu', name='block13_sepconv1_act')(x)

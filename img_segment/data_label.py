@@ -480,7 +480,7 @@ def predict_2Dlabel_generator(data_info=None):
 
         for i in range(sample_len):
 
-            if data_info.enhance_enable:
+            if data_info.enhance_enable is True:
                 x[i] = enhance_by_random(x=x[i], data_info=data_info)
 
             ylist = list(y[i])
@@ -492,8 +492,6 @@ def predict_2Dlabel_generator(data_info=None):
                 img = np.expand_dims(x[i], axis=0)
                 y_p, label_vect = data_info.model.predict(img)
                 label = pixels_boost_by_var(label=label_vect[0], index=index, data_info=data_info)
-                #img = img_contour(img=x[i].copy(),contour=data_info.contour,data_info=data_info)
-                #tabel2DShow(tabel=data_info.contour,img=img,title=str(data_info.contour_title),save_path=data_info.boost_self_check_save_path)
                 labsBuf[i] = label
 
                 if data_info.sample_loss > 40:
@@ -548,10 +546,12 @@ def seg2var(seg=None,data_info=None):
     return var_tabel
 
 
-def one_hot_seg(model=None,data_info=None,thickness=1e-4,extend=10):
+def one_hot_seg(model=None,data_info=None,thickness=1e-4,extend=10,img_num=0):
 
     k = 0
     avg_p = 1.0 / data_info.class_num
+    if img_num == 0:
+        img_num = data_info.train_img_num
     print '... self_check ...'
     print thickness
     for x, y in data_info.train_generator:
@@ -601,7 +601,7 @@ def one_hot_seg(model=None,data_info=None,thickness=1e-4,extend=10):
 
         print 'check '+str(k) + ' imgs...'
         print
-        if k >= data_info.val_img_num * extend:
+        if k >= img_num:
             print 'self check finish'
             break
 
@@ -619,15 +619,15 @@ def loss_sub_avg(loss=None,data_info=None):
     return sum_loss
 
 
-def seg_label(model=None,data_info=None, generator=None,thickness=1e-9):  # produce one time and save in mem, maybe for fit
-    #extend = data_info.train_data_extend
-    extend  = 1
+def boost_seg(model=None,data_info=None, generator=None,thickness=1e-9,part=0,img_num=0):  # produce one time and save in mem, maybe for fit
     #x_val = np.zeros((data_info.train_img_num * extend, data_info.IMG_ROW, data_info.IMG_COL, 3), dtype=np.float32)
     #y_val = np.zeros((data_info.train_img_num * extend, data_info.class_num), dtype=np.float32)
     #labsBuf = np.zeros((data_info.train_img_num * extend, data_info.IMG_ROW_OUT, data_info.IMG_COL_OUT, data_info.class_num),
     #                   dtype=np.float32)
     k = 0
     avg_p = 1.0 / data_info.class_num
+    if img_num == 0:
+        img_num = data_info.train_img_num
     print 'generator 2D datas self_check...'
     print 'thickness is ' +str(thickness)
     for x, y in generator:
@@ -656,7 +656,9 @@ def seg_label(model=None,data_info=None, generator=None,thickness=1e-9):  # prod
                 label[:,:,:] = avg_p
             else:
                 label= seg[0].copy()
-                label = pixels_boost_by_var(label=label,index=index,data_info=data_info)
+                label = pixels_boost_by_var_contour(label=label,index=index,data_info=data_info)
+                img = img_contour(img=x[i].copy(), contour=data_info.contour, data_info=data_info)
+                tabel2DShow(tabel=data_info.contour, img=img, title=str(data_info.contour_title),save_path=data_info.boost_self_check_save_path)
 
             #labsBuf[k] = label
             #x_val[k] = x[i]
@@ -691,7 +693,7 @@ def seg_label(model=None,data_info=None, generator=None,thickness=1e-9):  # prod
             print label[data_info.IMG_ROW_OUT / 2, data_info.IMG_COL_OUT / 2]
 
             titels = []
-            title_up1 = 'boost'
+            title_up1 = 'boost'+str(part)
             title_img = 'GlobAve'
             loss_sub_bg = loss_sub_avg(loss=loss, data_info=data_info)
             title_loss = 'loss_sub_avg'
@@ -710,14 +712,14 @@ def seg_label(model=None,data_info=None, generator=None,thickness=1e-9):  # prod
                 label_mean = np.mean(label[ :, :, index])
                 x_labels.append(str(round(label_mean, 8)))
 
-            labels2DShow_boost(img=x[i], seg=seg[0],labels=label, loss=loss,data_info=data_info, titels=titels, show=False,
+            labels2DShow_boost(img=x[i],seg=seg[0],labels=label, loss=loss,data_info=data_info, titels=titels, show=False,
                          x_labels=x_labels, save_path=data_info.boost_self_check_save_path)
 
-            if k == data_info.train_img_num * extend:
+            if k == img_num:
                 break
 
         print 'num '+str(k)
-        if k ==  data_info.train_img_num * extend:
+        if k >=  img_num:
             return
             #print '2D datas are....'
             #print(type(x_val), x_val.shape, x_val.dtype)
@@ -730,11 +732,13 @@ def seg_label(model=None,data_info=None, generator=None,thickness=1e-9):  # prod
             #    return (x_val, labsBuf)
 
 
-def seg_label_now(model=None,data_info=None,part=0):  # produce one time and save in mem, maybe for fit
-    #extend = data_info.train_data_extend
-    extend  = 1
+def seg_label(model=None,data_info=None,part=0,img_num=0):  # produce one time and save in mem, maybe for fit
+
     k = 0
     avg_p = 1.0 / data_info.class_num
+    if img_num==0:
+        img_num = data_info.train_img_num
+
     for x, y in data_info.train_generator:
         sample_len = len(y)
         for i in range(sample_len):
@@ -770,11 +774,11 @@ def seg_label_now(model=None,data_info=None,part=0):  # produce one time and sav
             labels2DShow_robust(img=x[i], seg=seg[0],labels=label, seg_new=seg_new[0],loss=loss,
                                     data_info=data_info, titels=title,show=False,save_path=data_info.boost_self_check_save_path)
 
-            if k == data_info.train_img_num * extend:
+            if k == img_num:
                 break
 
         print 'num '+str(k)
-        if k > 20:#data_info.train_img_num * extend:
+        if k >= img_num:
             return
 
 
@@ -1019,7 +1023,7 @@ def labels2DShow(img=None, labels=None,data_info=None,show=True,titels=None,x_la
     plt.close()
 
 
-def labels2DShow_boost(img=None, labels=None,seg=None,loss=None, data_info=None,show=True,titels=None,x_labels=None,save_path=None):
+def labels2DShow_boost(img=None,labels=None,seg=None,loss=None, data_info=None,show=True,titels=None,x_labels=None,save_path=None):
     '''
     show the 2D output for predict Visualization
     :param url: image path
@@ -1053,7 +1057,6 @@ def labels2DShow_boost(img=None, labels=None,seg=None,loss=None, data_info=None,
     ax.set_title(titels[1])
     ax.get_xaxis().set_visible(False)
     ax.imshow(img)
-    #plt.xlabel(titels[2])
 
     ax = plt.subplot(2, n, n+n)
     ax.set_title(titels[2])
@@ -1163,15 +1166,17 @@ def strengthen_method_median_power_tristate(label=None,index=0,data_info=None):
 
 def pixels_boost_by_var(label=None,index=0,data_info=None):
 
+    edge_lower = data_info.edge_lower
+    edge_upper = data_info.edge_upper
     avg_p = data_info.avg_class_num
     for i in range(data_info.IMG_ROW_OUT):
         for j in range(data_info.IMG_COL_OUT):
 
             pixel_var = np.var(label[i,j])
-            if pixel_var < data_info.one_hot_var * 0.1:
+            if pixel_var <= data_info.one_hot_var * edge_lower: #由于Div8,边缘很难精确,允许一定的中间地带
                 label[i, j, :] = avg_p
 
-            elif pixel_var >= data_info.one_hot_var * 0.9:
+            elif pixel_var > data_info.one_hot_var * edge_upper:
                 max_index = label[i, j].argmax()
                 if index != max_index:
                     # #error object
@@ -1186,9 +1191,8 @@ def pixels_boost_by_var(label=None,index=0,data_info=None):
 
 def pixels_boost_by_var_contour(label=None,index=0,data_info=None):
 
-    data_info.contour_title = 0.1
+    contour_edge = data_info.contour_title
     contour = np.zeros((data_info.IMG_ROW_OUT, data_info.IMG_COL_OUT),dtype=np.float32)
-
     avg_p = data_info.avg_class_num
     for i in range(data_info.IMG_ROW_OUT):
         for j in range(data_info.IMG_COL_OUT):
@@ -1196,13 +1200,13 @@ def pixels_boost_by_var_contour(label=None,index=0,data_info=None):
             pixel_var = np.var(label[i,j])
 
             #test,轮廓
-            if pixel_var < data_info.one_hot_var *  data_info.contour_title:
+            if pixel_var < data_info.one_hot_var * contour_edge:
                 contour[i,j] = 1.0
 
-            if pixel_var < data_info.one_hot_var * 0.9:
+            if pixel_var <= data_info.one_hot_var * contour_edge:
                 label[i, j, :] = avg_p
 
-            elif pixel_var >= data_info.one_hot_var * 0.9:
+            elif pixel_var > data_info.one_hot_var * contour_edge:
                 max_index = label[i, j].argmax()
                 if index != max_index:
                     # #error object

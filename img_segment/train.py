@@ -50,24 +50,35 @@ def creatXception(data_info=None,upsample=False):
         print 'you chose upsample mode'
 
         x = base_model.output
+
         x = UpSampling2D((2, 2))(x)
-        x = SeparableConv2D(2048, (3, 3), use_bias=False, padding='same', name='up_conv1')(x)
+        x = keras.layers.concatenate([x, base_model.get_layer('block13_sepconv2_act').output])
+        x = SeparableConv2D(3072, (3, 3), use_bias=False, padding='same', name='up_conv1')(x)
         x = BatchNormalization(name='up_conv1_bn')(x)
         x = Activation('relu', name='up_conv1_act')(x)
-        x = keras.layers.concatenate([x, base_model.get_layer('block13_sepconv2_act').output])
-        x = SeparableConv2D(3072, (3, 3), use_bias=False, padding='same', name='up_conv2')(x)
-        x = BatchNormalization(name='up_conv2_bn')(x)
-        x = Activation('relu', name='up_conv2_act')(x)
+
+        #x = UpSampling2D((2, 2))(x)
+        #x = keras.layers.concatenate([x, base_model.get_layer('block4_sepconv2_act').output])
+        #x = SeparableConv2D(4096, (3, 3), use_bias=False, padding='same', name='up_conv2')(x)
+        #x = BatchNormalization(name='up_conv2_bn')(x)
+        #x = Activation('relu', name='up_conv2_act')(x)
+
+        x = Dropout(0.5)(x)
+        x = Conv2D(256, (1, 1), use_bias=False, name='out_conv1')(x)
+        #x = Dropout(0.5)(x)
+        x = Conv2D(256, (1, 1), use_bias=False, name='out_conv2')(x)
+        #x = Dropout(0.5)(x)
+        x = Conv2D(data_info.class_num, (1, 1), use_bias=False, name='conv_out')(x)
     else:
 
         base_model = xception.Xception(weights='imagenet', include_top=False, input_shape=inputShape,Div=8)
         data_info.base_model=base_model
         x = base_model.output
 
-    x = Dropout(0.5)(x)
-    x = Conv2D(256, (1, 1), use_bias=False, name='out_conv1')(x)
-    x = Conv2D(256, (1, 1), use_bias=False, name='out_conv2')(x)
-    x = Conv2D(data_info.class_num, (1, 1), use_bias=False, name='conv_out')(x)
+        x = Dropout(0.5)(x)
+        x = Conv2D(256, (1, 1), use_bias=False, name='out_conv1')(x)
+        x = Conv2D(256, (1, 1), use_bias=False, name='out_conv2')(x)
+        x = Conv2D(data_info.class_num, (1, 1), use_bias=False, name='conv_out')(x)
     seg_output = Activation('softmax', name='seg_out')(x)
     x = GlobalAveragePooling2D()(x)
     main_output = Activation('softmax', name='main_out')(x)
@@ -81,32 +92,32 @@ def train_model(data_set_path=None, data_info=None):
 
     # one_hot
     model = creatXception(data_info)
-    if data_info.one_hot_check is False:
-        data_label.one_hot_seg(model=model, data_info=data_info, extend=1, thickness=1e-9)
+    if data_info.one_hot_check is True:
+        data_label.one_hot_seg(model=model, data_info=data_info, extend=1, thickness=1e-9,img_num=10)
     weight_file = data_set_path + '/predictInfo/pixel_level'+str(data_info.pixel_level) + '/one_hot_softmax' + '.hdf5'
     #model = one_hot(data_set_path=data_set_path, model=model, weight_file=weight_file, data_info=data_info)
     model.load_weights(weight_file)
-
-
-    if data_info.one_hot_check is False:
+    if data_info.one_hot_check is True:
         data_label.one_hot_seg(model=model, data_info=data_info, extend=1, thickness=1e-9)
         return model
-    if data_info.boost_self_check is False:
-        data_label.seg_label(model=model, data_info=data_info,
-                                                    generator=data_info.train_generator)
+
     # boost one_hot
     boost = False
     if boost is True:
         data_info.model = model
         model = creatXception(data_info)
         model.load_weights(weight_file)
+        if data_info.boost_self_check is True:
+            data_label.boost_seg(model=model, data_info=data_info, generator=data_info.train_generator,img_num=10)
+
         weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/one_hot_boost.hdf5'
         #model = boost_one_hot(model=model,data_set_path=data_set_path, data_info=data_info,weight_file=weight_file)
         model = simple_boost(model=model,data_set_path=data_set_path, data_info=data_info,weight_file=weight_file)
         #model.load_weights(weight_file)
+        if data_info.boost_self_check is True:
+            data_label.boost_seg(model=model, data_info=data_info,generator=data_info.train_generator,part=1)
+            return model
 
-        #model.load_weights('boost1.hdf5')
-        #data_label.seg_label_now(model=model, data_info=data_info, part=1)
         del data_info.model
 
     #U-net-based
@@ -117,10 +128,18 @@ def train_model(data_set_path=None, data_info=None):
         data_info.base_model_weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/base_model.hdf5'
         data_info.base_model.save_weights(data_info.base_model_weight_file)
 
+        data_info.edge_lower = 0.9999     #使用时边界清晰
+        data_info.edge_upper = 0.9999
         model = creatXception(data_info,upsample=True)
         weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/robust.hdf5'
+
+        if data_info.boost_self_check is True:
+            data_label.seg_label(model=model, data_info=data_info, img_num=20)
         model = u_net_based(model=model,data_set_path=data_set_path, data_info=data_info,weight_file=weight_file)
         #model.load_weights(weight_file)
+        if data_info.boost_self_check is True:
+            data_label.seg_label(model=model, data_info=data_info, part=1)
+
         del data_info.model
 
     print '.....trian finish......'
@@ -446,12 +465,14 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
         loss=loss,
         metrics=[keras.metrics.categorical_accuracy]
     )
-    #model.summary()
+    model.summary()
     model.fit_generator(
         generator=data_gen,
         steps_per_epoch=data_info.steps_per_epoch,
         epochs=2,
     )
+    #model.save_weights('unet-temp.h5')
+    #model.load_weights('unet-temp.h5')
     del data_gen
 
     loss = {'seg_out': 'categorical_crossentropy'}
@@ -472,7 +493,7 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     model.fit_generator(
         generator=boost_generator,
         steps_per_epoch=data_info.steps_per_epoch,
-        epochs=2,
+        epochs=3,
     )
     del boost_generator
 
@@ -498,7 +519,7 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     model.fit_generator(
         generator=boost_generator,
         steps_per_epoch=data_info.steps_per_epoch,
-        epochs=1,
+        epochs=2,
         #validation_data=(data_info.boost_x_val, data_info.boost_label_val),
         #callbacks=[checkpoint, early_stopping]
     )
@@ -630,7 +651,7 @@ def boost_one_hot_1by1(data_set_path=None, model=None, weight_file=None, data_in
 
         if data_info.boost_self_check:
             model.load_weights(filepath=weight_file)
-            x, y = data_label.seg_label(data_info=data_info,generator=data_info.train_generator)
+            x, y = data_label.boost_seg(data_info=data_info,generator=data_info.train_generator)
         else:
             x, y = data_label.predict_2Dlabel_datas_no_check(data_info=data_info,generator=data_info.train_generator)
 

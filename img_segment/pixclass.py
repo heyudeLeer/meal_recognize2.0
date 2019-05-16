@@ -35,8 +35,8 @@ class DataInfo:
         self.step_check = False
 
         self.epoch = 30
-        self.one_hot_check = True
-        self.boost_self_check = True
+        self.one_hot_check = False
+        self.boost_self_check = False
 
         self.base_model = None
         self.base_model_weight_file = None
@@ -57,7 +57,9 @@ class DataInfo:
         self.sample_loss=0.0
         self.contour=None
         self.img_contour=None
-        self.contour_title=None
+        self.contour_title=0.8
+        self.edge_upper = 0.9
+        self.edge_lower = 0.1
         self.boost_finish=False
 
         self.big_loss_x = None
