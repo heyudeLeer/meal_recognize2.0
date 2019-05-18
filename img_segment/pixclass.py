@@ -37,6 +37,9 @@ class DataInfo:
         self.epoch = 30
         self.one_hot_check = False
         self.boost_self_check = False
+        self.edge_line = 0.9999           #使用时边界清晰 , median:0.999999/1e-08 , 0.9999/1e-06 , 0.99/1e-05
+        self.edge_upper = 0.9
+        self.edge_lower = 0.1
 
         self.base_model = None
         self.base_model_weight_file = None
@@ -57,9 +60,6 @@ class DataInfo:
         self.sample_loss=0.0
         self.contour=None
         self.img_contour=None
-        self.contour_title=0.8
-        self.edge_upper = 0.9
-        self.edge_lower = 0.1
         self.boost_finish=False
 
         self.big_loss_x = None
@@ -68,7 +68,7 @@ class DataInfo:
 
                            #brightness_range, color_range, contrast_range, sharpness_range
         self.enhance_par = [  (0.75, 1.15),      (0.8, 1.4),  (0.8, 1.4),    (0.8, 1.4)]
-        self.enhance_enable = True
+        self.enhance_enable = False
 
         self.sess = None
         self.cpus = 1

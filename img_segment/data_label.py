@@ -517,6 +517,9 @@ def predict_2Dlabel_generator(data_info=None):
                 print k
                 k += 1
 
+            if data_info.enhance_enable is False:
+                x[i] = enhance_by_random(x=x[i], data_info=data_info)
+
         data_info.big_loss_len = k
         #yield (x, labsBuf[0:sample_len])
         #yield (x, {'main_out': y, 'seg_out': labsBuf[0:sample_len]})
@@ -658,7 +661,7 @@ def boost_seg(model=None,data_info=None, generator=None,thickness=1e-9,part=0,im
                 label= seg[0].copy()
                 label = pixels_boost_by_var_contour(label=label,index=index,data_info=data_info)
                 img = img_contour(img=x[i].copy(), contour=data_info.contour, data_info=data_info)
-                tabel2DShow(tabel=data_info.contour, img=img, title=str(data_info.contour_title),save_path=data_info.boost_self_check_save_path)
+                tabel2DShow(tabel=data_info.contour, img=img, title=str(data_info.edge_line),save_path=data_info.boost_self_check_save_path)
 
             #labsBuf[k] = label
             #x_val[k] = x[i]
@@ -1166,17 +1169,20 @@ def strengthen_method_median_power_tristate(label=None,index=0,data_info=None):
 
 def pixels_boost_by_var(label=None,index=0,data_info=None):
 
-    edge_lower = data_info.edge_lower
-    edge_upper = data_info.edge_upper
+    #edge_lower = data_info.edge_lower
+    #edge_upper = data_info.edge_upper
+    edge_line = data_info.edge_line
     avg_p = data_info.avg_class_num
     for i in range(data_info.IMG_ROW_OUT):
         for j in range(data_info.IMG_COL_OUT):
 
             pixel_var = np.var(label[i,j])
-            if pixel_var <= data_info.one_hot_var * edge_lower: #由于Div8,边缘很难精确,允许一定的中间地带
+            if pixel_var <= data_info.one_hot_var * edge_line: #由于Div8,边缘很难精确,允许一定的中间地带
                 label[i, j, :] = avg_p
 
-            elif pixel_var > data_info.one_hot_var * edge_upper:
+            elif pixel_var > data_info.one_hot_var * edge_line:
+                #median = np.median(label[i, j])
+                #print median
                 max_index = label[i, j].argmax()
                 if index != max_index:
                     # #error object
@@ -1190,8 +1196,7 @@ def pixels_boost_by_var(label=None,index=0,data_info=None):
     return label
 
 def pixels_boost_by_var_contour(label=None,index=0,data_info=None):
-
-    contour_edge = data_info.contour_title
+    edge_line = data_info.edge_line
     contour = np.zeros((data_info.IMG_ROW_OUT, data_info.IMG_COL_OUT),dtype=np.float32)
     avg_p = data_info.avg_class_num
     for i in range(data_info.IMG_ROW_OUT):
@@ -1200,13 +1205,13 @@ def pixels_boost_by_var_contour(label=None,index=0,data_info=None):
             pixel_var = np.var(label[i,j])
 
             #test,轮廓
-            if pixel_var < data_info.one_hot_var * contour_edge:
+            if pixel_var < data_info.one_hot_var * edge_line:
                 contour[i,j] = 1.0
 
-            if pixel_var <= data_info.one_hot_var * contour_edge:
+            if pixel_var <= data_info.one_hot_var * edge_line:
                 label[i, j, :] = avg_p
 
-            elif pixel_var > data_info.one_hot_var * contour_edge:
+            elif pixel_var > data_info.one_hot_var * edge_line:
                 max_index = label[i, j].argmax()
                 if index != max_index:
                     # #error object
