@@ -267,7 +267,7 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
     predicInfo.model = dataInfo.model
     predicInfo.train_img_num = dataInfo.train_img_num
 
-    predic.getPerPixels(setsPath=data_set_path + '/train', data_info=dataInfo)
+    ret = predic.getPerPixels(setsPath=data_set_path + '/train', data_info=dataInfo,out_path=data_set_path)
     predicInfo.object_pixels_avg = dataInfo.object_pixels_avg
     predicInfo.object_area_avg = dataInfo.object_area_avg
 
@@ -283,7 +283,7 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
     #sleep(20)
     #print 'img_rec finsh ,should exa source!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 
-    return predicInfo  # or error see log
+    return ret , predicInfo  # or error see log
 
 
 # Once the model is created, you can test it with the following api

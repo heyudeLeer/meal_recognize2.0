@@ -65,9 +65,9 @@ def creatXception(data_info=None,upsample=False):
 
         x = Dropout(0.5)(x)
         x = Conv2D(256, (1, 1), use_bias=False, name='out_conv1')(x)
-        x = Dropout(0.25)(x)
+        x = Dropout(0.5)(x)
         x = Conv2D(256, (1, 1), use_bias=False, name='out_conv2')(x)
-        x = Dropout(0.25)(x)
+        x = Dropout(0.5)(x)
         x = Conv2D(data_info.class_num, (1, 1), use_bias=False, name='conv_out')(x)
 
     else:
@@ -76,9 +76,8 @@ def creatXception(data_info=None,upsample=False):
         data_info.base_model=base_model
         x = base_model.output
 
-        #x = Dropout(0.5)(x)
-        #x = Conv2D(256, (1, 1), use_bias=False, name='out_conv1')(x)
-        x = Conv2D(256, (1, 1), use_bias=False, name='out_conv2')(x)
+        x = Dropout(0.5)(x)
+        x = Conv2D(256, (1, 1), use_bias=False, name='out_conv1')(x)
         x = Conv2D(data_info.class_num, (1, 1), use_bias=False, name='conv_out')(x)
 
     seg_output = Activation('softmax', name='seg_out')(x)
@@ -94,8 +93,6 @@ def train_model(data_set_path=None, data_info=None):
 
     # one_hot
     model = creatXception(data_info)
-    if data_info.one_hot_check is True:
-        data_label.one_hot_seg(model=model, data_info=data_info, extend=1, thickness=1e-9,img_num=10)
     weight_file = data_set_path + '/predictInfo/pixel_level'+str(data_info.pixel_level) + '/one_hot_softmax' + '.hdf5'
     model = one_hot(data_set_path=data_set_path, model=model, weight_file=weight_file, data_info=data_info)
     #model.load_weights(weight_file)
@@ -135,7 +132,6 @@ def train_model(data_set_path=None, data_info=None):
 
         if data_info.boost_self_check is True:
             data_label.boost_seg(model=data_info.model, data_info=data_info, generator=data_info.train_generator,img_num=20)
-            #data_label.seg_label(model=model, data_info=data_info, img_num=20)
         model = u_net_based(model=model,data_set_path=data_set_path, data_info=data_info,weight_file=weight_file)
         #model.load_weights(weight_file)
         if data_info.boost_self_check is True:
@@ -241,7 +237,7 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
 
     model.fit_generator(
         generator=data_gen,
-        epochs=5,
+        epochs=6,
         steps_per_epoch=data_info.steps_per_epoch,
         #workers=data_info.cpus,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
         #validation_data=data_info.val_datas,#data_info.val_generator,
@@ -474,7 +470,7 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     for layer in model.layers[:]:
         layer.trainable = False
         print 'boost froze' + layer.name
-        if layer.name =='block12_add': #''block14_sepconv2_act':
+        if layer.name =='block11_add': #''block14_sepconv2_act':
             break
     data_info.batch_size_GPU = 10
     data_label.get_data_info(data_set_path=data_set_path, data_info=data_info)

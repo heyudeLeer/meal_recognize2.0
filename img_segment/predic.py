@@ -13,6 +13,8 @@ import uniout
 from keras.preprocessing import image
 from keras.applications.imagenet_utils import preprocess_input
 import cv2
+import warnings
+import datetime
 
 import data_label
 import train
@@ -579,7 +581,7 @@ def segImgDir_cantai(PredictInfo=None, segPath=None, plca_path=None):
 
 def getPredPixels(imgP=None, data_info=None):
 
-    avg_p = 1.0 / data_info.class_num
+    avg_p = 1.0 / data_info.class_num * 0.5 #* 1e-4
     object_pixel_sum = 0
 
     for i in range(data_info.IMG_ROW_OUT):
@@ -593,17 +595,61 @@ def getPredPixels(imgP=None, data_info=None):
             max_index = a.argmax()
             object = imgP[0, i, j, max_index]
 
-            if median_x < avg_p/2 and object > 0.6:
+            if median_x < avg_p and object > 0.6:
                 object_pixel_sum += 1
 
     return object_pixel_sum
 
 
 # train
-def getPerPixels(setsPath=None, data_info=None):
 
+def save_pred_image(img=None, labels=None,data_info=None,out_path=None,titels=None,x_labels=None):
+    '''
+    show the 2D output for predict Visualization
+    :param url: image path
+    :return: plt show result   #plt 和 ax 搞混了，日后做实验
+    '''
+    img = img.copy()
+    img = np.uint8(img)
+    var_tabel = np.var(labels,axis=2)
+
+    plt.figure(figsize=(20, 5))
+    plt.suptitle(titels,fontsize=20)
+
+    for i in range(data_info.class_num):
+        ax = plt.subplot(1, data_info.class_num+2, i+1)
+        ax.set_title(x_labels[i],fontsize=12)
+        # ax.get_xaxis().set_visible(False)
+        #ax.get_yaxis().set_visible(False)
+        label = labels[:, :, i]
+        #print(type(label), label.dtype, np.min(label), np.max(label))
+        ax.imshow(label)
+        #plt.subplots_adjust(wspace=1, hspace=1)  # 调整子图间距
+
+    ax = plt.subplot(1, data_info.class_num + 2, data_info.class_num + 1)
+    #ax.set_title(titels[1])
+    ax.imshow(img)
+    #plt.xlabel(titels[2])
+
+    ax = plt.subplot(1, data_info.class_num + 2, data_info.class_num + 2)
+    ax.set_title('var')
+    ax.imshow(var_tabel)
+
+    save_path = out_path + '/predictImg/trained_warnings'
+    isExists = os.path.exists(save_path)
+    if not isExists:
+        os.makedirs(save_path)
+    nowTime = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')  # 现在
+    plt.savefig(save_path + '/' + nowTime + '.jpg')
+    plt.close()
+
+
+def getPerPixels(setsPath=None, data_info=None,out_path=None):
+
+    ret = 0
     objects = data_info.class_num
     for item in range(objects):
+
         dirName = data_info.class_name_dic_t.get(item)  # item is dish index; key is dish name
         if dirName == 'bg':  # 抑制背景，效果还不错，也够简单
             data_info.object_pixels_avg.append(1.0)
@@ -629,19 +675,37 @@ def getPerPixels(setsPath=None, data_info=None):
             img = data_label.loadImage(url=url,data_info=data_info)
             y_p,preds = data_info.model.predict(img)
 
+            x_labels = []
+            y = np.zeros((1,data_info.class_num),dtype=np.uint8)
+            y[0,item] = 1
+            for index in range(data_info.class_num):
+                x_labels.append(str(y[0, index]) + '/' + str(round(y_p[0, index], 3)))
+
             dot = getPredPixels(imgP=preds, data_info=data_info)
             dot_sum  += dot
             print dot
-            img = preds[0,:,:,item]
-            areas,_ = cv_tools.getAreaOneDimension(img=img,th=data_info.threshold_value)
-            if len(areas) != 1:
-                print
-                print 'warning!!!!! get Contours err on predict train sets...'
-                print 'warning!!!!! get Contours err on predict train sets...'
-                print 'warning!!!!! get Contours err on predict train sets...'
-                print
-            area_sum += areas[0]
-            print areas[0]
+            label = preds[0,:,:,item]
+            areas,_ = cv_tools.getAreaOneDimension(img=label,th=data_info.threshold_value)
+            if areas is None:
+                warnings.warn('train failed!! predict a train_set image,but contour is None')
+                save_pred_image(img=img[0], labels=preds[0], data_info=data_info,
+                                out_path=out_path,titels='pred none:'+name, x_labels=x_labels)
+                ret = -1
+            else:
+                area = max(areas)
+                if len(areas) > 1:
+                    warnings.warn('found more object,please check!')
+                    save_pred_image(img=img[0], labels=preds[0], data_info=data_info,
+                                    out_path=out_path,titels='more object:'+name, x_labels=x_labels)
+                    ret = 1
+                elif area > 2000 or area < 50:
+                    warnings.warn('object so small or big,please check!')
+                    save_pred_image(img=img[0], labels=preds[0], data_info=data_info,
+                                    out_path=out_path,titels='too big_small:'+name, x_labels=x_labels)
+                    ret = 1
+
+                area_sum += area
+                print area
 
         pixel_avg = dot_sum * 1.0 / len(files)
         area_avg = area_sum * 1.0 / len(files)
@@ -656,6 +720,7 @@ def getPerPixels(setsPath=None, data_info=None):
     print data_info.object_pixels_avg
     print 'data_info.object_area_avg:'
     print data_info.object_area_avg
+    return ret
 
 
 def CalcAccuracySegDir(PredictInfo=None,setsPath=None,top=3,verbose=1,data_set_path=None):
