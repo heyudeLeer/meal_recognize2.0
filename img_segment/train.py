@@ -69,7 +69,6 @@ def creatXception(data_info=None,upsample=False,train=True):
         x = Dropout(0.5)(x)
         x = Conv2D(256, (1, 1), use_bias=False, name='out_conv2')(x)
         x = Dropout(0.5)(x)
-        x = Conv2D(data_info.class_num, (1, 1), use_bias=False, name='conv_out')(x)
 
     else:
 
@@ -79,15 +78,20 @@ def creatXception(data_info=None,upsample=False,train=True):
 
         x = Dropout(0.5)(x)
         x = Conv2D(256, (1, 1), use_bias=False, name='out_conv1')(x)
+        x = Dropout(0.5)(x)
+
+    header_model = Model(inputs=base_model.input, outputs=x, name='header_model')
+
+    if train:
+        x = header_model.output
         x = Conv2D(data_info.class_num, (1, 1), use_bias=False, name='conv_out')(x)
-
-    seg_output = Activation('softmax', name='seg_out')(x)
-    x = GlobalAveragePooling2D()(x)
-    main_output = Activation('softmax', name='main_out')(x)
-
-    model = Model(inputs=base_model.input, outputs=[main_output,seg_output], name='one_hot_train_model')
-
-    return model
+        seg_output = Activation('softmax', name='seg_out')(x)
+        x = GlobalAveragePooling2D()(x)
+        main_output = Activation('softmax', name='main_out')(x)
+        model = Model(inputs=header_model.input, outputs=[main_output,seg_output], name='train_model')
+        return model
+    else:
+        return header_model
 
 
 def train_model(data_set_path=None, data_info=None):
@@ -141,6 +145,7 @@ def train_model(data_set_path=None, data_info=None):
         del data_info.model
 
     print '.....trian finish......'
+
     return model
 
 

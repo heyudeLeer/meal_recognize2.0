@@ -4,10 +4,14 @@ import os
 import sys
 import gc
 
-import numpy as np
-from keras.models import load_model
-from time import sleep, time
+import keras
 import tensorflow as tf
+import numpy as np
+
+from keras.models import Model
+from keras.layers import Activation, GlobalAveragePooling2D,Conv2D
+
+import time
 import matplotlib.pyplot as plt
 import cv2
 import datetime
@@ -153,6 +157,7 @@ class PredictInfo:
         self.class_num = 0
         self.class_name_dic_t = None
         self.model = None
+        self.header_model=None
         self.train_img_num = 0
         self.object_pixels_avg = []
         self.object_area_avg = []
@@ -294,15 +299,23 @@ def creat_model(data_set_path="/path/to/data_set/restaurant_name", pixel_level=3
     predicInfo = PredictInfo()
     predicInfo.name = data_set_path + '/predictInfo/pixel_level'+ str(pixel_level)+'/'
     loadStruct(predicInfo)
-    model = train.creatXception(predicInfo, upsample=True,train=False)
-    #model.summary()
-    predicInfo.model = model
+    header_model = train.creatXception(predicInfo, upsample=True,train=False)
+    #header_model.summary()
+    predicInfo.header_model = header_model
     getThredholdValue(predicInfo)
 
     return predicInfo  # recognition_info
 
 
 def load_trained_weights(predicInfo=None,data_set_path="/path/to/data_set/restaurant_name", pixel_level=3):
+
+    x = predicInfo.header_model.output
+    x = keras.layers.Conv2D(predicInfo.class_num, (1, 1), use_bias=False, name='conv_out')(x)
+
+    seg_output = Activation('softmax', name='seg_out')(x)
+    x = GlobalAveragePooling2D()(x)
+    main_output = Activation('softmax', name='main_out')(x)
+    predicInfo.model = Model(inputs=predicInfo.header_model.input, outputs=[main_output, seg_output], name='acting_model')
 
     weight_file = data_set_path + '/predictInfo/pixel_level' + str(pixel_level) + '/robust.hdf5'
     predicInfo.model.load_weights(weight_file)
