@@ -168,8 +168,9 @@ def saveStruct(*struct_datas):
         np.save(datas.name + "class_num", datas.class_num)
         np.save(datas.name + "class_name_dic_t", dict(datas.class_name_dic_t))
         np.save(datas.name + "train_img_num", datas.train_img_num)
-        np.save(datas.name + "object_pixels_avg", datas.object_pixels_avg)
-        np.save(datas.name + "object_area_avg", datas.object_area_avg)
+        if len(datas.object_pixels_avg)>0:
+            np.save(datas.name + "object_pixels_avg", datas.object_pixels_avg)
+            np.save(datas.name + "object_area_avg", datas.object_area_avg)
         print 'object_area_avg'
         print datas.object_area_avg
         print 'object_pixels_avg'
@@ -287,68 +288,34 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
 
 
 # Once the model is created, you can test it with the following api
-def load_trained_model(data_set_path="/path/to/data_set/restaurant_name", pixel_level=3):
-    '''
-    :param data_set_path:
-    :param image_url:
-    :return:a dic and pcla.jpg in data_set_path/predictImg of predict result; predict_info for hot_predict,
-    '''
-
-    lib_name = os.path.basename(data_set_path)
-    # load model on disk by name
-    model = load_model(data_set_path +'/predictInfo/pixel_level'+ str(pixel_level) +'/'+lib_name +'.h5')
-    #model.summary()
-
+def creat_model(data_set_path="/path/to/data_set/restaurant_name", pixel_level=3):
 
     # load img info on disk by name
     predicInfo = PredictInfo()
     predicInfo.name = data_set_path + '/predictInfo/pixel_level'+ str(pixel_level)+'/'
     loadStruct(predicInfo)
+    model = train.creatXception(predicInfo, upsample=True,train=False)
+    #model.summary()
     predicInfo.model = model
     getThredholdValue(predicInfo)
 
-
-    #print "IMG_ROW:" + str(predicInfo.IMG_ROW)
-    #print "IMG_COL:" + str(predicInfo.IMG_COL)
-    #print "IMG_ROW_OUT:" + str(predicInfo.IMG_ROW_OUT)
-    #print "IMG_COL_OUT:" + str(predicInfo.IMG_COL_OUT)
-    #print "class_num:" + str(predicInfo.class_num)
-    #print predicInfo.class_name_dic_t
-    #print 'predict model is '
-    #print type(model)
+    return predicInfo  # recognition_info
 
 
-    #dic = predic.segImgfile_web(data_info= predicInfo, url=image_url,out_path=data_set_path,show=check) # save pcla.jpg in data_set_path/predictImg
-    #ret = predic.segImgDir(seg_model=model, data_info= predicInfo, segPath='/home/heyude/temp/seg')
+def load_trained_weights(predicInfo=None,data_set_path="/path/to/data_set/restaurant_name", pixel_level=3):
+
+    weight_file = data_set_path + '/predictInfo/pixel_level' + str(pixel_level) + '/robust.hdf5'
+    predicInfo.model.load_weights(weight_file)
 
     return predicInfo  # recognition_info
 
 
 def predict_img(image_url='path/to/image',predict_info=None, check=False,data_set_path="/path/to/data_set/restaurant_name"):
 
-    # load model on disk by name
-    #model = predict_info.model
-    #model.summary()
-    #print 'predict by '
-    #print type(model)
-
-    #lib_name = os.path.basename(data_set_path)
-    #print 'restaurant_name is ' + lib_name
-    #print
-    # load img info on disk by name
-    #print 'the hot model info is:'
-    #print 'restaurant_name is ' + predict_info.name
-    #print "IMG_ROW:" + str(predict_info.IMG_ROW)
-    #print "IMG_COL:" + str(predict_info.IMG_COL)
-    #print "IMG_ROW_OUT:" + str(predict_info.IMG_ROW_OUT)
-    #print "IMG_COL_OUT:" + str(predict_info.IMG_COL_OUT)
-    #print "class_num:" + str(predict_info.class_num)
-    #print predict_info.class_name_dic_t
-
     dic = predic.segImgfile_web(data_info=predict_info, url=image_url, out_path=data_set_path,show=check)
     # ret = predic.segImgDir(seg_model=model, data_info= predic_info, segPath='/home/heyude/temp/seg')
 
-    return dic  # recognition_info
+    return dic
 
 
 def model_check(data_set_path=None, img_path=None):
@@ -357,9 +324,14 @@ def model_check(data_set_path=None, img_path=None):
     :param segPath: images path
     :return: print and plt show result
     '''
-    PredictInfo_0 = load_trained_model(data_set_path,pixel_level=0)
-    PredictInfo = load_trained_model(data_set_path)
+    #PredictInfo_0 = load_trained_model(data_set_path,pixel_level=0)
+    #PredictInfo = load_trained_model(data_set_path)
 
+    PredictInfo_0 = creat_model(data_set_path=data_set_path, pixel_level=0)
+    PredictInfo_0 = load_trained_weights(predicInfo=PredictInfo_0, data_set_path=data_set_path, pixel_level=0)
+
+    PredictInfo = creat_model(data_set_path=data_set_path, pixel_level=3)
+    PredictInfo = load_trained_weights(predicInfo=PredictInfo, data_set_path=data_set_path, pixel_level=3)
 
     for _, dirs, _ in os.walk(img_path):
         break

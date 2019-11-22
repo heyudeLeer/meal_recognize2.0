@@ -253,20 +253,20 @@ def getDishesBySegImg(dataInfo=None,segImg=None,drawCnt=0):
         object_num = 0
         name = dataInfo.class_name_dic_t.get(item)  # item is dish index; key is dish name
 
-        print
-        print name +'_avg: '+ str(dataInfo.object_area_avg[item])
-        print areas
+        #print
+        #print name +'_avg: '+ str(dataInfo.object_area_avg[item])
+        #print areas
 
         for area in areas:
             object_rate = area / dataInfo.object_area_avg[item]
 
             if object_rate > judgeInfo.object_min_rate:
                 object_num += 1
-                print 'get int '+ str(area) + ':' + str(object_rate)
+                #print 'get int '+ str(area) + ':' + str(object_rate)
 
         if object_num == 1 and object_rate > 1.0:
             object_num = round(object_rate)
-            print 'get round ' + str(object_rate) +":"+str(object_num)
+            #print 'get round ' + str(object_rate) +":"+str(object_num)
 
         if object_num > 0:
             dishes_dictory[name] = object_num

@@ -39,14 +39,15 @@ def mean_absolute_error(y_true, y_pred):
 
 
 
-def creatXception(data_info=None,upsample=False):
+def creatXception(data_info=None,upsample=False,train=True):
 
     # build the network with ImageNet weights
     inputShape = (data_info.IMG_ROW, data_info.IMG_COL, 3)
 
     if upsample is True:
         base_model = xception.Xception(include_top=False, input_shape=inputShape,Div=16)
-        base_model.load_weights(data_info.base_model_weight_file)
+        if train:
+            base_model.load_weights(data_info.base_model_weight_file)
         print 'you chose upsample mode'
 
         x = base_model.output
