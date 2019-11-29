@@ -44,8 +44,6 @@ def get_session(gpu_fraction=0.8):
             gpu_options=gpu_options, intra_op_parallelism_threads=num_threads))
     else:
         return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-#import keras.backend.tensorflow_backend as KTF
-#KTF.set_session(get_session(0.8))
 
 
 def pre_data_set(data_set_path=None,project_path=None):
@@ -121,7 +119,7 @@ def filter_xy_cv2(path=None):   # shape to same
 def get_data_info(data_set_path=None, data_info=None):
 
     print 'train data init...'
-    datagen = ImageDataGenerator(
+    data_info.data_gen = ImageDataGenerator(
         rotation_range=180,
         width_shift_range=0.2,
         height_shift_range=0.2,
@@ -136,7 +134,7 @@ def get_data_info(data_set_path=None, data_info=None):
     # this is a generator that will read pictures found in
     # subfolers of 'data/train', and indefinitely generate
     # batches of augmented image data
-    data_info.train_generator = datagen.flow_from_directory(
+    data_info.train_generator = data_info.data_gen.flow_from_directory(
         data_set_path + '/train' ,  # this is the target directory
         target_size=(data_info.IMG_ROW, data_info.IMG_COL),  # all images will be resized to 150x150
         batch_size=data_info.batch_size_GPU,
@@ -161,7 +159,8 @@ def get_data_info(data_set_path=None, data_info=None):
     # subfolers of 'data/train', and indefinitely generate
     # batches of augmented image data
     #datagen_val = ImageDataGenerator()
-    data_info.val_generator = datagen.flow_from_directory(
+
+    data_info.val_generator = data_info.data_gen.flow_from_directory(
         data_set_path + '/train',  # this is the target directory : validation
         target_size=(data_info.IMG_ROW, data_info.IMG_COL),  # all images will be resized to 150x150
         batch_size=data_info.batch_size_GPU*8,
@@ -171,6 +170,16 @@ def get_data_info(data_set_path=None, data_info=None):
     )
     data_info.val_img_num = data_info.val_generator.samples
 
+
+def train_generator_init(data_set_path=None,data_info=None):
+    data_info.train_generator = data_info.data_gen.flow_from_directory(
+        data_set_path + '/train',  # this is the target directory
+        target_size=(data_info.IMG_ROW, data_info.IMG_COL),  # all images will be resized to 150x150
+        batch_size=data_info.batch_size_GPU,
+        # save_to_dir=data_set_path+'/train_gen', save_prefix='good', save_format='jpg',
+        shuffle=True,
+        class_mode='categorical'
+    )
     remainder = data_info.train_img_num % data_info.batch_size_GPU
     if remainder == 0:
         steps_per_epoch = (data_info.train_img_num / data_info.batch_size_GPU) * data_info.train_data_extend
@@ -873,7 +882,7 @@ def one_hot_getValDatas(data_info=None,err_sample_check=False):
 
 # 修改train_generator的输出，重新封装为生成器，方便cpu-gpu连续工作
 def train_generator_clearbg(data_info=None):
-    length = data_info.val_img_num * data_info.val_data_extend
+    length = data_info.train_img_num * data_info.val_data_extend
     data_info.one_hot_x_val = np.zeros((length, data_info.IMG_ROW, data_info.IMG_COL, 3), dtype=np.float32)
     data_info.one_hot_y_val = np.zeros((length, data_info.class_num), dtype=np.float32)
     avg_p = 1.0 / data_info.class_num

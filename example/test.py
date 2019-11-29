@@ -5,7 +5,8 @@ import datetime
 from img_segment import pixclass
 from img_segment import predic
 from img_segment import data_label
-
+import keras.backend.tensorflow_backend as KTF
+KTF.set_session(data_label.get_session(0.75))
 
 def train(restaurant_path=None):
 

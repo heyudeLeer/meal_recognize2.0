@@ -22,16 +22,14 @@ import data_label
 
 class DataInfo:
     def __init__(self):
-        #self.IMG_ROW = 384
-        #self.IMG_COL = 384
+
+        self.batch_size_base = 2
         self.IMG_ROW = 512 #1024 #960  # 1920, 1080
         self.IMG_COL = 384 #768 #540
 
         self.CNN_OUT_DIV = None
         self.IMG_ROW_OUT = None
         self.IMG_COL_OUT = None
-        self.REDUCE_TIME = 0
-        self.batch_size_GPU = 0
         self.enlarge_size = 0
 
         self.label_mode = 0
@@ -77,10 +75,12 @@ class DataInfo:
         self.sess = None
         self.cpus = 1
         self.enhance_index = 0
-        self.val_data_extend = 20       # 5x20 = 100
-        self.train_data_extend = 10     # 5x10 = 50
+        self.val_data_extend = 15       # 5x20 = 100
+        self.train_data_extend = 5     # 5x10 = 50
         self.init=True
         self.pixel_level= 0
+        self.gpu_num = 0
+        self.batch_size_GPU = 1
 
         self.overlayerBg=True
         self.back_ground_path='/home/heyude/PycharmProjects/data_set/snacks2.0/black/bg'
@@ -105,42 +105,30 @@ class DataInfo:
         self.object_pixels_avg = []
         self.object_area_avg = []
         self.threshold_value=131
+        self.data_gen=None
 
     def para_init(self, pixel_level=0):
 
         self.pixel_level = pixel_level
 
         if pixel_level==0:
-            self.CNN_OUT_DIV = None
             self.IMG_ROW /= 2
             self.IMG_COL /= 2
             self.IMG_ROW_OUT = self.IMG_ROW / 32
             self.IMG_COL_OUT = self.IMG_COL / 32
-            self.REDUCE_TIME = 5
             self.enlarge_size = 4
-            self.batch_size_GPU = 8
 
         elif pixel_level==1:
-            self.CNN_OUT_DIV = 32
             self.IMG_ROW_OUT = self.IMG_ROW / 32
             self.IMG_COL_OUT = self.IMG_COL / 32
-            self.REDUCE_TIME = 5
-            self.batch_size_GPU = 5
 
         elif pixel_level==2:
-            self.CNN_OUT_DIV = 16
             self.IMG_ROW_OUT = self.IMG_ROW / 16
             self.IMG_COL_OUT = self.IMG_COL / 16
-            self.REDUCE_TIME = 4
-            self.batch_size_GPU = 3
 
         elif pixel_level==3:
-            self.CNN_OUT_DIV = 8
             self.IMG_ROW_OUT = self.IMG_ROW / 8
             self.IMG_COL_OUT = self.IMG_COL / 8
-            self.REDUCE_TIME = 3
-            self.batch_size_GPU = 2
-
 
         else:
             print "error, pixel_level should in [0,3]"

@@ -8,11 +8,16 @@ import math
 import time
 import numpy as np
 import keras
+import multiprocessing
+from tensorflow.python.client import device_lib
+
+from keras.utils import multi_gpu_model
 
 from keras.models import load_model,Model
 from keras.layers import Dropout, Activation, Input, GlobalAveragePooling2D
 from keras.layers import Conv2D, MaxPooling2D, UpSampling2D, BatchNormalization,SeparableConv2D
 from keras import backend as K
+import tensorflow as tf
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 import data_label
 import xception_outsize_change as xception
@@ -38,8 +43,17 @@ def mean_absolute_error(y_true, y_pred):
     return K.mean(K.abs(y_pred - y_true), axis=-1)
 
 
+def get_gpus_num():
+    local_device_protos = device_lib.list_local_devices()
+    num_gpus = sum([1 for d in local_device_protos if d.device_type == 'GPU'])
+    print ('gpu num is '+str(num_gpus))
+    if not num_gpus:
+        raise ValueError('GPU mode was specified, but no GPUs '
+                         'were found. To use CPU')
+    return num_gpus
 
-def creatXception(data_info=None,upsample=False,train=True):
+
+def creatXception(data_info=None,upsample=False,train=True,name='header_model'):
 
     # build the network with ImageNet weights
     inputShape = (data_info.IMG_ROW, data_info.IMG_COL, 3)
@@ -80,7 +94,7 @@ def creatXception(data_info=None,upsample=False,train=True):
         x = Conv2D(256, (1, 1), use_bias=False, name='out_conv1')(x)
         x = Dropout(0.5)(x)
 
-    header_model = Model(inputs=base_model.input, outputs=x, name='header_model')
+    header_model = Model(inputs=base_model.input, outputs=x, name=name)
 
     if train:
         x = header_model.output
@@ -88,6 +102,7 @@ def creatXception(data_info=None,upsample=False,train=True):
         seg_output = Activation('softmax', name='seg_out')(x)
         x = GlobalAveragePooling2D()(x)
         main_output = Activation('softmax', name='main_out')(x)
+        #with tf.device('/cpu:0'):
         model = Model(inputs=header_model.input, outputs=[main_output,seg_output], name='train_model')
         return model
     else:
@@ -95,6 +110,8 @@ def creatXception(data_info=None,upsample=False,train=True):
 
 
 def train_model(data_set_path=None, data_info=None):
+
+    data_info.gpu_num = get_gpus_num()
 
     # one_hot
     model = creatXception(data_info)
@@ -132,7 +149,7 @@ def train_model(data_set_path=None, data_info=None):
         data_info.base_model_weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/base_model.hdf5'
         data_info.base_model.save_weights(data_info.base_model_weight_file)
 
-        model = creatXception(data_info,upsample=True)
+        model = creatXception(data_info,upsample=True,name='header_unet')
         weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/robust.hdf5'
 
         if data_info.boost_self_check is True:
@@ -215,10 +232,6 @@ class my_call_back(keras.callbacks.Callback):
 
 def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
 
-    early_stopping = EarlyStopping(monitor='val_loss', patience=2, min_delta=2e-5)  # val_loss
-    checkpoint = ModelCheckpoint(weight_file, monitor='val_loss', verbose=2,
-                                     save_best_only=True, save_weights_only=True)
-
     opt = keras.optimizers.rmsprop(lr=0.0001, decay=1e-6) #'rmsprop' #
     # compile the model with a SGD/momentum optimizer
     # and a very slow learning rate.
@@ -232,20 +245,30 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
     # model.compile(optimizer=opt, loss=loss2, metrics=['accuracy'])
 
     loss = {'main_out': 'categorical_crossentropy'}
-    data_gen = data_label.train_generator_clearbg(data_info=data_info)  #data_info.train_generator
 
-    model.compile(
+    try:
+        parallel_model = multi_gpu_model(model, gpus=data_info.gpu_num,cpu_merge=False)
+        print("Training using multiple GPUs..")
+    except ValueError:
+        parallel_model = model
+        print("Training using single GPU or CPU..")
+    data_info.batch_size_GPU = data_info.batch_size_base * data_info.gpu_num
+    data_label.train_generator_init(data_set_path=data_set_path, data_info=data_info)
+    data_gen = data_label.train_generator_clearbg(data_info=data_info)  #data_info.train_generator
+    print ('batch_size_GPU is '+str(data_info.batch_size_GPU))
+
+    parallel_model.compile(
     optimizer=opt,
     loss=loss,
     metrics=[keras.metrics.categorical_accuracy]
     )
-    #model.summary()
-
-    model.fit_generator(
+    parallel_model.summary()
+    #workers = multiprocessing.cpu_count()
+    parallel_model.fit_generator(
         generator=data_gen,
-        epochs=6,
+        epochs=10,
         steps_per_epoch=data_info.steps_per_epoch,
-        #workers=data_info.cpus,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
+        #workers=workers,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
         #validation_data=data_info.val_datas,#data_info.val_generator,
         #callbacks=[checkpoint, early_stopping],
         #max_queue_size=32,
@@ -259,30 +282,40 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
         print 'boost froze' + layer.name
         if layer.name == 'block6_add':  # block6_add:GPU8
             break
-    data_info.batch_size_GPU = 6
-    data_label.get_data_info(data_set_path=data_set_path, data_info=data_info)
-
-    data_gen = data_label.train_generator_clearbg(data_info=data_info)  # data_info.train_generator
 
     #if data_info.epoch > 0:
     #    data_info.val_datas = data_label.one_hot_getValDatas(data_info=data_info) #单独跑一趟，后面的训练速度意外的快很多，不明白为什么
+    try:
+        parallel_model = multi_gpu_model(model, gpus=data_info.gpu_num,cpu_merge=False)
+        print("Training using multiple GPUs..")
+    except ValueError:
+        parallel_model = model
+        print("Training using single GPU or CPU..")
 
-    model.compile(
+    data_info.batch_size_GPU = (data_info.batch_size_base + 3)* data_info.gpu_num
+    data_label.train_generator_init(data_set_path=data_set_path, data_info=data_info)
+    data_gen = data_label.train_generator_clearbg(data_info=data_info)  # data_info.train_generator
+    print ('batch_size_GPU is '+str(data_info.batch_size_GPU))
+
+    parallel_model.compile(
         optimizer=opt,
         loss=loss,
         metrics=[keras.metrics.categorical_accuracy]
     )
-    #model.summary()
-    model.fit_generator(
+    parallel_model.summary()
+    early_stopping = EarlyStopping(monitor='val_loss', patience=2, min_delta=3e-5)  # val_loss
+    checkpoint = ModelCheckpoint(weight_file, monitor='val_loss', verbose=2,
+                                 save_best_only=True, save_weights_only=True)
+    parallel_model.fit_generator(
         generator=data_gen,
         epochs=10,
         steps_per_epoch=data_info.steps_per_epoch,
-        # workers=data_info.cpus,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
+        #workers=workers,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
         validation_data=(data_info.one_hot_x_val,data_info.one_hot_y_val),  # data_info.val_generator,
         callbacks=[checkpoint, early_stopping],
     )
     del data_gen
-    model.load_weights(weight_file)
+    model.save_weights(weight_file)
 
     return model
 
@@ -447,28 +480,33 @@ def simple_boost(data_set_path=None, data_info=None,weight_file=None,model=None,
 
 def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
 
-
-    data_info.batch_size_GPU = 2 #8
-    data_label.get_data_info(data_set_path=data_set_path, data_info=data_info)
-
     opt = keras.optimizers.rmsprop(lr=0.0001, decay=1e-6)  # 'rmsprop' #
     loss = {'seg_out': 'categorical_crossentropy'}
 
-    boost_generator = data_label.predict_2Dlabel_generator(data_info=data_info)
-    boost_generator.next()
     # 偶尔必须空跑一次，否则 ValueError: Tensor Tensor('main_out/Softmax:0', shape=(?, 24), dtype=float32) is not an element of this graph.
     # 很重要，但不明白
+    try:
+        parallel_model = multi_gpu_model(model, gpus=data_info.gpu_num,cpu_merge=False)
+        print("Training using multiple GPUs..")
+    except ValueError:
+        parallel_model = model
+        print("Training using single GPU or CPU..")
+    data_info.batch_size_GPU = data_info.batch_size_base * data_info.gpu_num
+    data_label.train_generator_init(data_set_path=data_set_path, data_info=data_info)
+    print ('batch_size_GPU is ' + str(data_info.batch_size_GPU))
+    boost_generator = data_label.predict_2Dlabel_generator(data_info=data_info)
+    boost_generator.next()
 
-    model.compile(
+    parallel_model.compile(
         optimizer=opt,
         loss=loss,
         metrics=[keras.metrics.categorical_accuracy]
     )
-    model.summary()
-    model.fit_generator(
+    parallel_model.summary()
+    parallel_model.fit_generator(
         generator=boost_generator,
         steps_per_epoch=data_info.steps_per_epoch,
-        epochs=5,
+        epochs=6,
     )
     del boost_generator
 
@@ -478,21 +516,29 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
         print 'boost froze' + layer.name
         if layer.name =='block11_add': #''block14_sepconv2_act':
             break
-    data_info.batch_size_GPU = 10
-    data_label.get_data_info(data_set_path=data_set_path, data_info=data_info)
-    boost_generator = data_label.predict_2Dlabel_generator(data_info=data_info)
-    #boost_generator.next()
 
-    model.compile(
+    try:
+        parallel_model = multi_gpu_model(model, gpus=data_info.gpu_num,cpu_merge=False)
+        print("Training using multiple GPUs..")
+    except ValueError:
+        parallel_model = model
+        print("Training using single GPU or CPU..")
+    data_info.batch_size_GPU = (data_info.batch_size_base + 8) * data_info.gpu_num
+    data_label.train_generator_init(data_set_path=data_set_path, data_info=data_info)
+    print ('batch_size_GPU is ' + str(data_info.batch_size_GPU))
+    boost_generator = data_label.predict_2Dlabel_generator(data_info=data_info)
+    boost_generator.next()
+
+    parallel_model.compile(
         optimizer=opt,
         loss=loss,
         metrics=[keras.metrics.categorical_accuracy]
     )
-    model.summary()
-    model.fit_generator(
+    parallel_model.summary()
+    parallel_model.fit_generator(
         generator=boost_generator,
         steps_per_epoch=data_info.steps_per_epoch,
-        epochs=2,
+        epochs=3,
         #validation_data=(data_info.boost_x_val, data_info.boost_label_val),
         #callbacks=[checkpoint, early_stopping]
     )
