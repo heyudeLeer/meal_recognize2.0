@@ -438,13 +438,6 @@ def predict_2Dlabel_generator(data_info=None,check=False):
     labsBuf = np.zeros((buf_len, data_info.IMG_ROW_OUT, data_info.IMG_COL_OUT, data_info.class_num),dtype=np.float32)
 
     while True:
-
-        if k == 0:   #do not know why?
-            k += 1
-            x = np.expand_dims(data_info.boost_x_val[0], axis=0)
-            data_info.model.predict(x)
-            yield None
-
         x, y  = data_info.train_generator.next()
         sample_len = len(y)
         for i in range(sample_len):
@@ -459,7 +452,8 @@ def predict_2Dlabel_generator(data_info=None,check=False):
                 #y[i,:] = avg_p
             else:
                 img = np.expand_dims(x[i], axis=0)
-                _, label_vect = data_info.model.predict(img)
+                with data_info.graph.as_default():
+                    _, label_vect = data_info.model.predict(img)
                 #label = pixels_boost_by_var(label=label_vect[0], index=index, data_info=data_info)
                 label = label_boost_by_var(label=label_vect[0],index=index,data_info=data_info)
                 #print(type(label), label.dtype, label.shape, np.min(label), np.max(label))
@@ -470,13 +464,13 @@ def predict_2Dlabel_generator(data_info=None,check=False):
                 labels2DShow(img=x[i], labels=labsBuf[i], data_info=data_info, show=True)
 
             if data_info.start_get_val is True:
-                if k == 1:
+                if k == 0:
                     print(type(data_info.boost_label_val), data_info.boost_label_val.shape,
                           data_info.boost_label_val.dtype, np.min(data_info.boost_label_val), np.max(data_info.boost_label_val))
                 if k < length:
-                    data_info.boost_x_val[k-1] = x[i]
-                    data_info.boost_label_val[k-1] = labsBuf[i]
-                if k == length:
+                    data_info.boost_x_val[k] = x[i]
+                    data_info.boost_label_val[k] = labsBuf[i]
+                if k == length-1:
                     data_info.start_get_val = False
                     print(type(data_info.boost_x_val), data_info.boost_x_val.shape,
                           data_info.boost_x_val.dtype, np.min(data_info.boost_x_val), np.max(data_info.boost_x_val))

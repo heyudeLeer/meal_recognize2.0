@@ -496,7 +496,6 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     data_label.train_generator_init(data_set_path=data_set_path, data_info=data_info)
     print ('batch_size_GPU is ' + str(data_info.batch_size_GPU))
     boost_generator = data_label.predict_2Dlabel_generator(data_info=data_info)
-    boost_generator.next()
 
     parallel_model.compile(
         optimizer=opt,
@@ -530,7 +529,6 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     data_label.train_generator_init(data_set_path=data_set_path, data_info=data_info)
     print ('batch_size_GPU is ' + str(data_info.batch_size_GPU))
     boost_generator = data_label.predict_2Dlabel_generator(data_info=data_info)
-    boost_generator.next()
 
     parallel_model.compile(
         optimizer=opt,

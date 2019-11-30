@@ -73,6 +73,7 @@ class DataInfo:
         self.enhance_enable = False
 
         self.sess = None
+        self.graph = None
         self.cpus = 1
         self.enhance_index = 0
         self.val_data_extend = 15       # 5x20 = 100
@@ -224,7 +225,9 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
         os.makedirs(path)
         print 'mkdir ' + path
 
-    dataInfo.sess = tf.Session(graph=tf.get_default_graph())
+    graph = tf.get_default_graph()
+    dataInfo.graph = graph
+    dataInfo.sess = tf.Session(graph=graph)
 
     nowTime = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')  # 现在
 
