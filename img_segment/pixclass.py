@@ -224,8 +224,7 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
         os.makedirs(path)
         print 'mkdir ' + path
 
-    with tf.Session() as sess:
-        dataInfo.sess = sess
+    dataInfo.sess = tf.Session(graph=tf.get_default_graph())
 
     nowTime = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')  # 现在
 
@@ -268,7 +267,7 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
     predicInfo.name = path
     saveStruct(predicInfo, )
     lib_name = os.path.basename(data_set_path)
-    predicInfo.model.save(path + lib_name + '.h5') # save model on disk
+    #predicInfo.model.save(path + lib_name + '.h5') # save model on disk
     print '############# save ' + lib_name + ' predict need info in + data_set_path ######################'
     print
 

@@ -120,7 +120,7 @@ def train_model(data_set_path=None, data_info=None):
     #model.load_weights(weight_file)
     if data_info.one_hot_check is True:
         data_label.one_hot_seg(model=model, data_info=data_info, extend=1, thickness=1e-9)
-        return model
+        #return model
 
     # boost one_hot
     boost = False
@@ -148,7 +148,6 @@ def train_model(data_set_path=None, data_info=None):
         data_info.model = model
         data_info.base_model_weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/base_model.hdf5'
         data_info.base_model.save_weights(data_info.base_model_weight_file)
-
         model = creatXception(data_info,upsample=True,name='header_unet')
         weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/robust.hdf5'
 
@@ -157,7 +156,7 @@ def train_model(data_set_path=None, data_info=None):
         model = u_net_based(model=model,data_set_path=data_set_path, data_info=data_info,weight_file=weight_file)
         #model.load_weights(weight_file)
         if data_info.boost_self_check is True:
-            data_label.seg_label(model=model, data_info=data_info, part=1)
+            data_label.robust_seg(model=model, data_info=data_info,img_num=20)
 
         del data_info.model
 
@@ -252,6 +251,7 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
     except ValueError:
         parallel_model = model
         print("Training using single GPU or CPU..")
+
     data_info.batch_size_GPU = data_info.batch_size_base * data_info.gpu_num
     data_label.train_generator_init(data_set_path=data_set_path, data_info=data_info)
     data_gen = data_label.train_generator_clearbg(data_info=data_info)  #data_info.train_generator
@@ -266,7 +266,7 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
     #workers = multiprocessing.cpu_count()
     parallel_model.fit_generator(
         generator=data_gen,
-        epochs=10,
+        epochs=12,
         steps_per_epoch=data_info.steps_per_epoch,
         #workers=workers,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
         #validation_data=data_info.val_datas,#data_info.val_generator,
@@ -288,11 +288,12 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
     try:
         parallel_model = multi_gpu_model(model, gpus=data_info.gpu_num,cpu_merge=False)
         print("Training using multiple GPUs..")
+        data_info.batch_size_GPU = (data_info.batch_size_base + 2) * data_info.gpu_num
     except ValueError:
         parallel_model = model
         print("Training using single GPU or CPU..")
+        data_info.batch_size_GPU = (data_info.batch_size_base + 3)
 
-    data_info.batch_size_GPU = (data_info.batch_size_base + 3)* data_info.gpu_num
     data_label.train_generator_init(data_set_path=data_set_path, data_info=data_info)
     data_gen = data_label.train_generator_clearbg(data_info=data_info)  # data_info.train_generator
     print ('batch_size_GPU is '+str(data_info.batch_size_GPU))
@@ -506,7 +507,7 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     parallel_model.fit_generator(
         generator=boost_generator,
         steps_per_epoch=data_info.steps_per_epoch,
-        epochs=6,
+        epochs=12,
     )
     del boost_generator
 
@@ -520,10 +521,12 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     try:
         parallel_model = multi_gpu_model(model, gpus=data_info.gpu_num,cpu_merge=False)
         print("Training using multiple GPUs..")
+        data_info.batch_size_GPU = (data_info.batch_size_base + 6) * data_info.gpu_num
     except ValueError:
         parallel_model = model
         print("Training using single GPU or CPU..")
-    data_info.batch_size_GPU = (data_info.batch_size_base + 8) * data_info.gpu_num
+        data_info.batch_size_GPU = (data_info.batch_size_base + 8)
+
     data_label.train_generator_init(data_set_path=data_set_path, data_info=data_info)
     print ('batch_size_GPU is ' + str(data_info.batch_size_GPU))
     boost_generator = data_label.predict_2Dlabel_generator(data_info=data_info)
@@ -538,7 +541,7 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     parallel_model.fit_generator(
         generator=boost_generator,
         steps_per_epoch=data_info.steps_per_epoch,
-        epochs=3,
+        epochs=2,
         #validation_data=(data_info.boost_x_val, data_info.boost_label_val),
         #callbacks=[checkpoint, early_stopping]
     )

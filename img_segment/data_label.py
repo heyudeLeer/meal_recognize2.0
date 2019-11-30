@@ -5,6 +5,7 @@ print 'in data_label'
 
 import os
 from PIL import ImageFile
+import time
 import datetime
 import math
 
@@ -27,16 +28,20 @@ import tensorflow as tf
 from keras.preprocessing.image import ImageDataGenerator,img_to_array,array_to_img
 import uniout
 import cv2
+import warnings
 from keras import backend as K
 from keras.preprocessing import image
 import random
 import pixclass
 import predic
+import open_cvision.opencv_tools as opencv_tools
+
 clip_min = K.epsilon()
 clip_max = 1.0 - K.epsilon()
 
+
+'''
 def get_session(gpu_fraction=0.8):
-    '''Assume that you have 6GB of GPU memory and want to allocate ~2GB'''
     num_threads = os.environ.get('OMP_NUM_THREADS')
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_fraction)
     if num_threads:
@@ -44,6 +49,12 @@ def get_session(gpu_fraction=0.8):
             gpu_options=gpu_options, intra_op_parallelism_threads=num_threads))
     else:
         return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+'''
+
+def get_session(gpu_fraction=0.8):
+    '''Assume that you have 6GB of GPU memory and want to allocate ~2GB'''
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_fraction)
+    return tf.Session(graph=tf.get_default_graph(),config=tf.ConfigProto(gpu_options=gpu_options))
 
 
 def pre_data_set(data_set_path=None,project_path=None):
@@ -413,67 +424,17 @@ def np_percent(x=None):
         return x * 1.0 / sum
 
 
-# by open_cvision tools
-def train_generator_with2Dlabel(data_info=None, pure_2d=False): #by open_cvision tools
-
-    for x, y in data_info.train_generator:
-
-        #print 'x type'
-        #print x.shape
-        #print(type(x[0]), x[0].dtype, np.min(x[0]), np.max(x[0]))
-        sample_len = len(y)
-        labsBuf = np.zeros((sample_len, data_info.IMG_ROW_OUT, data_info.IMG_COL_OUT, data_info.class_num), dtype=np.float32)
-        if data_info.overlayerBg:
-            mix_img = np.zeros((sample_len, data_info.IMG_ROW, data_info.IMG_COL, 3), dtype=np.uint8)
-
-        for i in range(sample_len):
-            ylist = list(y[i])
-            index = ylist.index(1.0)
-
-            if data_info.class_name_dic_t[index] == 'bg_no': # 抑制背景，效果还不错，也够简单
-                y[i][index] = 0
-                continue
-
-            # img to label
-            label,orign_size_label=img2laebl(img=x[i],data_info=data_info)
-
-            labsBuf[i, :, :, index] = label
-
-            if data_info.step_check:
-                labels2DShow(img=x[i], labels=labsBuf[i], data_info=data_info)
-
-            if data_info.overlayerBg:
-                mix_img[i] = imgOverlayBg(img=x[i], label2D=orign_size_label, bg_path=data_info.back_ground_path, data_info=data_info)
-
-        if data_info.overlayerBg:
-            x=mix_img
-
-        if data_info.label_mode == 1:
-            yield x, labsBuf
-        elif data_info.label_mode == 2:
-            yield (x, {'main_out': y, 'seg_out': labsBuf})
-
-
 # to train by GPU size,
 # yield to a generator
-def predict_2Dlabel_generator(data_info=None):
+def predict_2Dlabel_generator(data_info=None,check=False):
     length = data_info.train_img_num* data_info.val_data_extend
     data_info.boost_x_val = np.zeros((length, data_info.IMG_ROW, data_info.IMG_COL, 3),dtype=np.float32)
     data_info.boost_label_val = np.zeros((length, data_info.IMG_ROW_OUT, data_info.IMG_COL_OUT,data_info.class_num),dtype=np.float32)
 
-    length = data_info.train_img_num* data_info.train_data_extend
-    data_info.big_loss_x = np.zeros((length, data_info.IMG_ROW, data_info.IMG_COL, 3), dtype=np.float32)
-    data_info.big_loss_y = np.zeros((length, data_info.IMG_ROW_OUT, data_info.IMG_COL_OUT, data_info.class_num),
-                                         dtype=np.float32)
-
     k = 0
     avg_p = 1.0 / data_info.class_num
-    print 'boost sync...'
-    if data_info.batch_size_GPU > 64:
-        buf_len = data_info.batch_size_GPU
-    else:
-        buf_len = 64
-
+    print 'boost...'
+    buf_len = data_info.batch_size_GPU
     labsBuf = np.zeros((buf_len, data_info.IMG_ROW_OUT, data_info.IMG_COL_OUT, data_info.class_num),dtype=np.float32)
 
     while True:
@@ -486,7 +447,6 @@ def predict_2Dlabel_generator(data_info=None):
 
         x, y  = data_info.train_generator.next()
         sample_len = len(y)
-
         for i in range(sample_len):
 
             if data_info.enhance_enable is True:
@@ -496,18 +456,18 @@ def predict_2Dlabel_generator(data_info=None):
             index = ylist.index(1.0)
             if data_info.class_name_dic_t[index] == 'bg' :  # 抑制背景，效果还不错，也够简单
                 labsBuf[i] = avg_p
-                y[i,:] = avg_p
+                #y[i,:] = avg_p
             else:
                 img = np.expand_dims(x[i], axis=0)
-                y_p, label_vect = data_info.model.predict(img)
-                label = pixels_boost_by_var(label=label_vect[0], index=index, data_info=data_info)
+                _, label_vect = data_info.model.predict(img)
+                #label = pixels_boost_by_var(label=label_vect[0], index=index, data_info=data_info)
+                label = label_boost_by_var(label=label_vect[0],index=index,data_info=data_info)
+                #print(type(label), label.dtype, label.shape, np.min(label), np.max(label))
+
                 labsBuf[i] = label
 
-                if data_info.sample_loss > 40:
-                    data_info.big_loss_x[k-1] = x[i]
-                    data_info.big_loss_y[k-1] = label
-                    data_info.sample_loss = 0
-                    k += 1
+            if check:
+                labels2DShow(img=x[i], labels=labsBuf[i], data_info=data_info, show=True)
 
             if data_info.start_get_val is True:
                 if k == 1:
@@ -529,7 +489,6 @@ def predict_2Dlabel_generator(data_info=None):
             if data_info.enhance_enable is False:
                 x[i] = enhance_by_random(x=x[i], data_info=data_info)
 
-        data_info.big_loss_len = k
         #yield (x, labsBuf[0:sample_len])
         #yield (x, {'main_out': y, 'seg_out': labsBuf[0:sample_len]})
         if data_info.label_mode == 2:
@@ -538,12 +497,17 @@ def predict_2Dlabel_generator(data_info=None):
             yield (x, labsBuf[0:sample_len])
 
 
-def img_contour(contour=None,img=None,data_info=None):
+def img_contour(label=None,img=None,data_info=None):
+    times = 2**data_info.pixel_level
     for i in range(data_info.IMG_ROW_OUT):
+        start = 0
         for j in range(data_info.IMG_COL_OUT):
-            if contour[i,j] == 1.0:
-                img[(i*8-3):(i*8+3),(j*8-3):(j*8+3),:]  = [255,0,0]
+            if label[i,j] > 0.5:
+                start += 1
+                if start>1:
+                    img[i*times:(i+1)*times,(j-1)*times:j*times,:]  = [255,0,0]
     return img
+
 
 def mean_squared_error(y_true=0, y_pred=0):
     return np.mean(np.square(y_pred - y_true))
@@ -606,7 +570,8 @@ def one_hot_seg(model=None,data_info=None,thickness=1e-4,extend=10,img_num=0):
                 x_labels = []
                 for index in range(data_info.class_num):
                     seg_mean = np.mean(seg[0, :, :, index])
-                    x_labels.append(str(y[i,index]) +'/'+ str(round(y_p[0,index],3))+'/'+str(round(seg_mean,3)) )
+                    #x_labels.append(str(round(y[i,index],2)) +'/'+ str(round(y_p[0,index],2))+'/'+str(round(seg_mean,2)) )
+                    x_labels.append(data_info.class_name_dic_t[index])
 
                 labels2DShow(img=x[i],labels=seg[0],data_info=data_info,titels=titels, show=False,
                              x_labels=x_labels,save_path=data_info.one_hot_check_save_path)
@@ -618,24 +583,7 @@ def one_hot_seg(model=None,data_info=None,thickness=1e-4,extend=10,img_num=0):
             break
 
 
-def loss_sub_avg(loss=None,data_info=None):
-    bg_loss = data_info.avg_cce_loss
-    sum_loss = 0
-    for i in range(data_info.IMG_ROW_OUT):
-        for j in range(data_info.IMG_COL_OUT):
-            if loss[i,j] > bg_loss and loss[i,j] - bg_loss < data_info.avg_class_num:
-                loss[i,j] -= bg_loss
-            else:
-                sum_loss += loss[i,j]
-
-    return sum_loss
-
-
-def boost_seg(model=None,data_info=None, generator=None,thickness=1e-9,part=0,img_num=0):  # produce one time and save in mem, maybe for fit
-    #x_val = np.zeros((data_info.train_img_num * extend, data_info.IMG_ROW, data_info.IMG_COL, 3), dtype=np.float32)
-    #y_val = np.zeros((data_info.train_img_num * extend, data_info.class_num), dtype=np.float32)
-    #labsBuf = np.zeros((data_info.train_img_num * extend, data_info.IMG_ROW_OUT, data_info.IMG_COL_OUT, data_info.class_num),
-    #                   dtype=np.float32)
+def boost_seg(model=None,data_info=None, generator=None,thickness=1e-9,img_num=0):  # produce one time and save in mem, maybe for fit
     k = 0
     avg_p = 1.0 / data_info.class_num
     if img_num == 0:
@@ -651,8 +599,8 @@ def boost_seg(model=None,data_info=None, generator=None,thickness=1e-9,part=0,im
             if data_info.class_name_dic_t[index] == 'bg':  # 抑制背景，效果还不错，也够简单
                 y[i, :] = avg_p
 
-            #if data_info.enhance_enable is True:
-            #    x[i] = enhance_by_random(x=x[i], data_info=data_info)
+            if data_info.enhance_enable is True:
+                x[i] = enhance_by_random(x=x[i], data_info=data_info)
 
             img = np.expand_dims(x[i], axis=0)
             y_p,seg = model.predict(img)
@@ -668,9 +616,11 @@ def boost_seg(model=None,data_info=None, generator=None,thickness=1e-9,part=0,im
                 label[:,:,:] = avg_p
             else:
                 label= seg[0].copy()
-                label = pixels_boost_by_var_contour(label=label,index=index,data_info=data_info)
-                img = img_contour(img=x[i].copy(), contour=data_info.contour, data_info=data_info)
-                tabel2DShow(tabel=data_info.contour, img=img, title=str(data_info.edge_line),save_path=data_info.boost_self_check_save_path)
+                print label.shape
+                label = label_boost_by_var(label=label,index=index,data_info=data_info)
+
+            img_cover = img_contour(img=x[i].copy(), label=label[:,:,index], data_info=data_info)
+            cover2Show(label=label[:,:,index], img=x[i], img_cover=img_cover, title='var',save_path=data_info.boost_self_check_save_path)
 
             #labsBuf[k] = label
             #x_val[k] = x[i]
@@ -705,7 +655,7 @@ def boost_seg(model=None,data_info=None, generator=None,thickness=1e-9,part=0,im
             print label[data_info.IMG_ROW_OUT / 2, data_info.IMG_COL_OUT / 2]
 
             titels = []
-            title_up1 = 'boost'+str(part)
+            title_up1 = 'boost'
             title_img = 'GlobAve'
             loss_sub_bg = loss_sub_avg(loss=loss, data_info=data_info)
             title_loss = 'loss_sub_avg'
@@ -744,7 +694,7 @@ def boost_seg(model=None,data_info=None, generator=None,thickness=1e-9,part=0,im
             #    return (x_val, labsBuf)
 
 
-def seg_label(model=None,data_info=None,part=0,img_num=0):  # produce one time and save in mem, maybe for fit
+def robust_seg(model=None,data_info=None,img_num=0):  # produce one time and save in mem, maybe for fit
 
     k = 0
     avg_p = 1.0 / data_info.class_num
@@ -772,7 +722,7 @@ def seg_label(model=None,data_info=None,part=0,img_num=0):  # produce one time a
                 label[:,:,:] = avg_p
             else:
                 label= seg[0].copy()
-                label = pixels_boost_by_var(label=label,index=index,data_info=data_info)
+                label = label_boost_by_var(label=label,index=index,data_info=data_info)
 
             k += 1
 
@@ -780,7 +730,7 @@ def seg_label(model=None,data_info=None,part=0,img_num=0):  # produce one time a
             loss_sub_bg = loss_sub_avg(loss=loss, data_info=data_info)
             title_loss_value = str(round(loss_sub_bg, 8))
             title = []
-            title.append('robust'+str(part))
+            title.append('robust')
             title.append(title_loss_value)
 
             labels2DShow_robust(img=x[i], seg=seg[0],labels=label, seg_new=seg_new[0],loss=loss,
@@ -793,6 +743,18 @@ def seg_label(model=None,data_info=None,part=0,img_num=0):  # produce one time a
         if k >= img_num:
             return
 
+
+def loss_sub_avg(loss=None,data_info=None):
+    bg_loss = data_info.avg_cce_loss
+    sum_loss = 0
+    for i in range(data_info.IMG_ROW_OUT):
+        for j in range(data_info.IMG_COL_OUT):
+            if loss[i,j] > bg_loss and loss[i,j] - bg_loss < data_info.avg_class_num:
+                loss[i,j] -= bg_loss
+            else:
+                sum_loss += loss[i,j]
+
+    return sum_loss
 
 
 def predict_2Dlabel_datas_no_check(data_info=None, generator=None):# produce one time and save in mem, maybe for fit
@@ -882,11 +844,14 @@ def one_hot_getValDatas(data_info=None,err_sample_check=False):
 
 # 修改train_generator的输出，重新封装为生成器，方便cpu-gpu连续工作
 def train_generator_clearbg(data_info=None):
-    length = data_info.train_img_num * data_info.val_data_extend
-    data_info.one_hot_x_val = np.zeros((length, data_info.IMG_ROW, data_info.IMG_COL, 3), dtype=np.float32)
-    data_info.one_hot_y_val = np.zeros((length, data_info.class_num), dtype=np.float32)
+
     avg_p = 1.0 / data_info.class_num
-    k = 0
+
+    if data_info.val_full is False:
+        length = data_info.val_img_num * data_info.val_data_extend
+        data_info.one_hot_x_val = np.zeros((length, data_info.IMG_ROW, data_info.IMG_COL, 3), dtype=np.float32)
+        data_info.one_hot_y_val = np.zeros((length, data_info.class_num), dtype=np.float32)
+        k = 0
 
     while True:
 
@@ -968,17 +933,21 @@ def imgOverlayBg(img=None,label2D=None,bg_path=None,data_info=None):
     return bg_img
 
 
-def tabel2DShow(tabel=None,img=None,title=0,save_path=None):
+def cover2Show(label=None,img=None,img_cover=None,title=0,save_path=None):
 
     plt.figure(figsize=(10, 4))
 
-    ax = plt.subplot(1, 2, 1)
+    ax = plt.subplot(1, 3, 1)
     ax.set_title(title, fontsize=12)
-    ax.imshow(tabel)
+    ax.imshow(label)
 
     img = np.uint8(img)
-    ax = plt.subplot(1, 2, 2)
+    ax = plt.subplot(1, 3, 2)
     ax.imshow(img)
+
+    img_cover = np.uint8(img_cover)
+    ax = plt.subplot(1, 3, 3)
+    ax.imshow(img_cover)
 
     if save_path is not None:
         nowTime = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')  # 现在
@@ -995,18 +964,18 @@ def labels2DShow(img=None, labels=None,data_info=None,show=True,titels=None,x_la
     :param url: image path
     :return: plt show result   #plt 和 ax 搞混了，日后做实验
     '''
+
     img = img.copy()
     img = np.uint8(img)
-    var_tabel = np.var(labels,axis=2)
-    print var_tabel[30:32,:]
-
 
     plt.figure(figsize=(20, 5))
-    plt.suptitle(titels[0],fontsize=20)
+    if titels is not None:
+        plt.suptitle(titels[0],fontsize=20)
 
     for i in range(data_info.class_num):
         ax = plt.subplot(1, data_info.class_num+2, i+1)
-        ax.set_title(x_labels[i],fontsize=12)
+        if x_labels is not None:
+            ax.set_title(x_labels[i],fontsize=12)
         # ax.get_xaxis().set_visible(False)
         #ax.get_yaxis().set_visible(False)
         label = labels[:, :, i]
@@ -1015,10 +984,13 @@ def labels2DShow(img=None, labels=None,data_info=None,show=True,titels=None,x_la
         #plt.subplots_adjust(wspace=1, hspace=1)  # 调整子图间距
 
     ax = plt.subplot(1, data_info.class_num + 2, data_info.class_num + 1)
-    ax.set_title(titels[1])
+    if titels is not None:
+        ax.set_title(titels[1])
     ax.imshow(img)
-    plt.xlabel(titels[2])
+    if titels is not None:
+        plt.xlabel(titels[2])
 
+    var_tabel = np.var(labels,axis=2)
     ax = plt.subplot(1, data_info.class_num + 2, data_info.class_num + 2)
     ax.set_title('var')
     ax.imshow(var_tabel)
@@ -1033,6 +1005,7 @@ def labels2DShow(img=None, labels=None,data_info=None,show=True,titels=None,x_la
         plt.show()
 
     plt.close()
+
 
 
 def labels2DShow_boost(img=None,labels=None,seg=None,loss=None, data_info=None,show=True,titels=None,x_labels=None,save_path=None):
@@ -1204,34 +1177,52 @@ def pixels_boost_by_var(label=None,index=0,data_info=None):
 
     return label
 
-def pixels_boost_by_var_contour(label=None,index=0,data_info=None):
-    edge_line = data_info.edge_line
-    contour = np.zeros((data_info.IMG_ROW_OUT, data_info.IMG_COL_OUT),dtype=np.float32)
+
+def label_boost_by_var(label=None,index=0,data_info=None):
+
+    # get轮廓
     avg_p = data_info.avg_class_num
-    for i in range(data_info.IMG_ROW_OUT):
-        for j in range(data_info.IMG_COL_OUT):
+    #avg_th = np.uint8(256*avg_p*0.8)
 
-            pixel_var = np.var(label[i,j])
+    edges =  np.var(label,axis=2)
+    edges = np.uint8(edges * 256)
+    var_max = np.max(edges)
+    #print var_max
+    #x = edges
+    #print(type(x), x.shape, x.dtype, np.min(x), np.max(x))
+    #print x[26:36,20:30]
 
-            #test,轮廓
-            if pixel_var < data_info.one_hot_var * edge_line:
-                contour[i,j] = 1.0
+    ret, thresh = cv2.threshold(edges, var_max-1, 255, cv2.THRESH_BINARY)
 
-            if pixel_var <= data_info.one_hot_var * edge_line:
-                label[i, j, :] = avg_p
+    if opencv_tools.OPEN_CV_VERSION[0] == str(2):
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)  # cv2.RETR_EXTERNAL RETR_LIST #thresh.copy()
+    else:
+        _, contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            elif pixel_var > data_info.one_hot_var * edge_line:
-                max_index = label[i, j].argmax()
-                if index != max_index:
-                    # #error object
-                    data_info.err_object += 1
+    if len(contours) == 0:
+        warnings.warn('predict seg no contours,dirty img in train set!')
+        exit(0)
 
-                label[i, j, :] = 0.0
-                label[i, j, index] = 1.0
-            else:
-                data_info.contour_pixels += 1
+    contoursAreas = []
+    for cnt in contours:
+        #hull = cv2.convexHull(cnt)
+        #contoursAreas.append(cv2.contourArea(hull))
+        contoursAreas.append(cv2.contourArea(cnt))
+    maxIndex = contoursAreas.index(max(contoursAreas))
 
-    data_info.contour = contour
+    w,h,_ = label.shape
+    canvas = np.zeros((w,h))
+
+    canvas[:, :] = avg_p
+    cv2.drawContours(image=canvas, contours=[contours[maxIndex]], contourIdx=-1, color=0.0, thickness=-1)
+    for i in range(data_info.class_num):
+        if i == index:
+            continue
+        label[:, :, i] = canvas
+    canvas[:, :] = avg_p
+    cv2.drawContours(image=canvas, contours=[contours[maxIndex]], contourIdx=-1, color=1.0, thickness=-1)
+    label[:, :, index] = canvas
+
     return label
 
 
