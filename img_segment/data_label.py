@@ -134,7 +134,7 @@ def get_data_info(data_set_path=None, data_info=None):
         rotation_range=180,
         width_shift_range=0.2,
         height_shift_range=0.2,
-        shear_range=20.0,
+        shear_range=0.2,
         zoom_range=[0.7,1.3],
         #channel_shift_range=0.5, # No effect
         #brightness_range=(0.8, 1.2),

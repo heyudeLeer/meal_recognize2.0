@@ -105,8 +105,9 @@ class DataInfo:
 
         self.object_pixels_avg = []
         self.object_area_avg = []
-        self.threshold_value=131
+        self.threshold_value=0
         self.data_gen=None
+        self.min_area = 0
 
     def para_init(self, pixel_level=0):
 
@@ -150,7 +151,7 @@ class PredictInfo:
         self.train_img_num = 0
         self.object_pixels_avg = []
         self.object_area_avg = []
-        self.threshold_value=131
+        self.threshold_value=0
 
 
 def saveStruct(*struct_datas):
@@ -195,11 +196,19 @@ def loadStruct(*struct_datas):
         print(datas.name + "* have loaded...!")
 
 
-def getThredholdValue(data_info=None): # multi: 1.2-->2.2
+def getThredholdValue(data_info=None,y=0):
     th = 1.0 / data_info.class_num
-    y = 2.2 - 2 * th  # ( [0.5,1.2] [0.1,2.0],[0.0000001,2.2])
+    if y==0: #auto, multi: 1.2-->2.2
+        y = 2.2 - 2 * th  # ( [0.5,1.2] [0.1,2.0],[0.0000001,2.2])
+    print 'threshold avg times is '+str(y)
     th = round(th * y * 255)
     data_info.threshold_value = np.uint8(th)
+    #print data_info.threshold_value
+
+    data_info.min_area = data_info.IMG_ROW_OUT * data_info.IMG_COL_OUT * 0.02  # 去噪声
+    print 'ignore_size fraction is '+str(0.02)
+
+
 
 
 def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level=3):
@@ -273,11 +282,6 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
     #predicInfo.model.save(path + lib_name + '.h5') # save model on disk
     print '############# save ' + lib_name + ' predict need info in + data_set_path ######################'
     print
-
-    #del trainModel, segModel  # deletes the existing model
-    #gc.collect()
-    #sleep(20)
-    #print 'img_rec finsh ,should exa source!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 
     return ret , predicInfo  # or error see log
 
@@ -355,14 +359,20 @@ def model_check(data_set_path=None, img_path=None):
             img_0 = data_label.loadImage(url=url,data_info=PredictInfo_0)
             img = data_label.loadImage(url=url,data_info=PredictInfo)
 
-            _, pred = PredictInfo.model.predict(img)
             _, pred_0 = PredictInfo_0.model.predict(img_0)
+            _, pred = PredictInfo.model.predict(img)
 
-            RgbImg,dishes_info = predic.getRgbImgFromUpsampling(imgP=pred, data_info=PredictInfo)
-            dishes_info, canvas = predic.getDishesBySegImg(dataInfo=PredictInfo, segImg=pred[0],drawCnt=2)
+            RgbImg_0 = predic.get_rgb_mark(imgP=pred_0, data_info=PredictInfo_0)
+            dishes_info_0, canvas_0 ,area_fraction_0= predic.get_dishes_with_confidence_debug(dataInfo=PredictInfo_0, segImg=pred_0[0])
 
-            RgbImg_0, dishes_info_0 = predic.getRgbImgFromUpsampling(imgP=pred_0, data_info=PredictInfo_0)
-            dishes_info_0, canvas_0 = predic.getDishesBySegImg(dataInfo=PredictInfo_0, segImg=pred_0[0], drawCnt=2)
+            RgbImg = predic.get_rgb_mark(imgP=pred, data_info=PredictInfo)
+            dishes_info, canvas,area_fraction = predic.get_dishes_with_confidence_debug(dataInfo=PredictInfo, segImg=pred[0])
+
+            print dishes_info_0
+            print dishes_info
+
+            print area_fraction_0
+            print area_fraction
 
             i += 1
             # display source img
@@ -388,12 +398,12 @@ def model_check(data_set_path=None, img_path=None):
             #img = data_label.loadImage(url=plca_path + '/' + shotname+'_pcla.jpg',data_info=PredictInfo)
             ax = plt.subplot(5, n, i+n*3)
             ax.set_title('base')
-            ax.imshow(canvas_0/255.)
+            ax.imshow(np.mean(canvas_0,axis=2))
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
             ax = plt.subplot(5, n, i + n * 4)
-            ax.imshow(canvas / 255.)
+            ax.imshow(np.mean(canvas,axis=2))
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 

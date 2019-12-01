@@ -270,7 +270,7 @@ def objectBoolean(img=None):
     return canvas
 
 
-def getAreaOneDimension(img=None,th=131,canvas=None,check=False):
+def getAreaOneDimension(img=None,th=0,canvas=None,check=False):
     areas=None
 
     #print(type(img),img.dtype, np.min(img), np.max(img))
@@ -302,7 +302,7 @@ def getAreaOneDimension(img=None,th=131,canvas=None,check=False):
         #contour = cv2.convexHull(contour)
 
         area = cv2.contourArea(contour)
-        area = round( area, 2)  #1.1修正粒度误差
+        #area = round( area, 2)  #1.1修正粒度误差
         areas.append(area)
 
         if canvas is not None:

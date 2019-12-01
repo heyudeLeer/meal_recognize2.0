@@ -22,7 +22,6 @@ from keras.layers import Input, Activation
 from keras.models import Model
 from open_cvision import opencv_tools as cv_tools
 
-
 #zhfont1 = matplotlib.font_manager.FontProperties(fname='/usr/share/fonts/truetype/arphic/ukai.ttc')
 
 class JudgeInfo:
@@ -223,6 +222,108 @@ def getRgbImgFromUpsampling(imgP=None, data_info=None, check=False,coordinate=Fa
     return rgbImg, dishes_dictory
 
 
+def get_rgb_mark(imgP=None, data_info=None):
+
+    targetColor = targetColorInit(class_num =data_info.class_num)
+    rgbImg = np.zeros((data_info.IMG_ROW_OUT, data_info.IMG_COL_OUT, 3), dtype='uint8')
+
+    avg_p = 1.0/data_info.class_num
+    for i in range(data_info.IMG_ROW_OUT):
+        for j in range(data_info.IMG_COL_OUT):
+            a = imgP[0, i, j]
+            max_index = a.argmax()
+            object = imgP[0, i, j, max_index]
+            if object > avg_p*2:
+                max_index = a.argmax()
+                object = imgP[0, i, j, max_index]
+
+                if object >= 0.9:
+                    rgbImg[i, j, :] = targetColor[max_index]  # 给像素赋值，以示区别
+                elif object >=0.7:
+                    rgbImg[i, j, :] = (144,144,144)
+                elif object >=0.5:
+                    rgbImg[i, j, :] = (96,96,64)
+                else:
+                    rgbImg[i, j, :] = (48,48,48)
+
+    return rgbImg
+
+
+def get_contours(img=None,th=0):
+
+    ret, thresh = cv2.threshold(src=img,thresh=th,maxval=255, type=cv2.THRESH_BINARY)
+    if cv2.__version__[0] == str(2):
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)  # cv2.RETR_EXTERNAL RETR_LIST
+    else:
+        _, contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    return contours
+
+
+def get_confidence(img=None,th=0):
+    ret, thresh = cv2.threshold(src=img, thresh=th, maxval=0,type=cv2.THRESH_TOZERO)
+    #x = thresh
+    #print(type(x), x.shape, x.dtype, np.min(x), np.max(x))
+    thresh = thresh.astype(np.float)
+    #x = thresh
+    #print(type(x), x.shape, x.dtype, np.min(x), np.max(x))
+
+    #print thresh[20:30,24]
+    thresh[thresh==0.0] = np.nan
+    #print thresh[20:30,24]
+    means = np.nanmean(thresh)/255.
+    #print means
+    return means
+
+
+def get_dishes_with_confidence(dataInfo=None,segImg=None):
+
+    dishes_dictory = {}
+    img = np.uint8(segImg * 256)
+
+    for index in range(dataInfo.class_num):
+        contours = get_contours(img=img[:,:,index], th=dataInfo.threshold_value)
+
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area > dataInfo.min_area:
+                confidence = get_confidence(img=img[:,:,index], th=dataInfo.threshold_value)
+                name = dataInfo.class_name_dic_t.get(index)
+                dishes_dictory[name] = confidence
+
+    return dishes_dictory
+
+
+def get_dishes_with_confidence_debug(dataInfo=None,segImg=None):
+
+    dishes_dictory = {}
+    img = np.uint8(segImg * 256)
+
+    x, y, z = segImg.shape
+    seg_contour = np.zeros((x, y, z), dtype=np.uint8)
+
+    area_fraction = {}
+    areas =  dataInfo.IMG_ROW_OUT * dataInfo.IMG_COL_OUT
+
+    for index in range(dataInfo.class_num):
+        contours = get_contours(img=img[:,:,index], th=dataInfo.threshold_value)
+        canvas = np.zeros((x, y), dtype=np.uint8)
+
+        for contour in contours:
+            area = cv2.contourArea(contour)
+
+            # confidence in area,not all img,  Unfinished
+            confidence = get_confidence(img=img[:, :, index], th=dataInfo.threshold_value)
+            name = dataInfo.class_name_dic_t.get(index)
+            dishes_dictory[name] = confidence
+
+            cv2.drawContours(image=canvas, contours=[contour], contourIdx=-1, color=255, thickness=1)
+            area_fraction[name] = area / areas
+
+        seg_contour[:,:,index]  = canvas
+
+    return dishes_dictory,seg_contour,area_fraction
+
+
 # predict
 def getDishesBySegImg(dataInfo=None,segImg=None,drawCnt=0):
     '''
@@ -361,28 +462,17 @@ def imgPredict2DShow_diff(url=None,predict_info=None):
 
 
 def segImgfile_web(data_info= None, url=None,out_path=None, show=False):
-    '''
-    image segmentation
-    :param file: image path
-    :return: print and plt show result
-    '''
-    drawCnt = 0
-    dic_ret = {}
+
     print ('predict  ' + url)
 
-    t0 = time.time()
     img = data_label.loadImage(url=url,data_info=data_info) #113ms
     y_p, pred = data_info.model.predict(img)  #70ms
-    #print pred.shape()
+
     if show is True:
-        RgbImg,dishes_info = getRgbImgFromUpsampling(imgP=pred, data_info=data_info)  #310ms
-        drawCnt = 1
-
-    dishes_info, canvas_l = getDishesBySegImg(dataInfo=data_info, segImg=pred[0],drawCnt=drawCnt)       #2ms
-
-    t1 = time.time()
-    dic_ret = dishes_info
-    dic_ret['usetime'] = t1 - t0
+        RgbImg = get_rgb_mark(imgP=pred, data_info=data_info)
+        dishes_info, seg_contour,area_fraction = get_dishes_with_confidence_debug(dataInfo=data_info, segImg=pred[0])
+    else:
+        dishes_info = get_dishes_with_confidence(dataInfo=data_info, segImg=pred[0])
 
     if show is True:
 
@@ -406,19 +496,20 @@ def segImgfile_web(data_info= None, url=None,out_path=None, show=False):
             ax = plt.subplot(n, m, m+1 + i)
             ax.set_title(data_info.class_name_dic_t.get(i))
             ax.get_xaxis().set_visible(False)
-            ax.imshow(canvas_l[i]/255.)
+            ax.imshow(seg_contour[:,:,i])
 
         for i in range(data_info.class_num - 1):
-            canvas_l[0] += canvas_l[i + 1]
+            seg_sum = np.sum(seg_contour,axis=2)
         ax = plt.subplot(n, m, 3)
-        ax.imshow(canvas_l[0]/255.)
+        ax.imshow(seg_sum)
         ax.get_xaxis().set_visible(False)
+        print (area_fraction)
 
         for i in range(data_info.class_num):
             ax = plt.subplot(n, m, m*2+1 + i)
             ax.set_title(str(dishes_info.get(data_info.class_name_dic_t.get(i))))
             ax.get_xaxis().set_visible(False)
-            ax.imshow(pred[0,:,:,i]/255.)
+            ax.imshow(pred[0,:,:,i])
 
         pixel_name = os.path.basename(url)
         #pixel_name = pixel_name[0:-4]
@@ -433,9 +524,9 @@ def segImgfile_web(data_info= None, url=None,out_path=None, show=False):
         plt.show()
         plt.close()
 
-    dic_ret = sorted(dic_ret.items(), key=lambda e: e[0], reverse=False)
-    #print dic_ret
-    return dic_ret
+    #dishes_info = sorted(dishes_info.items(), key=lambda e: e[0], reverse=False)
+
+    return dishes_info
 
 
 def segImgDir(PredictInfo=None, segPath=None):

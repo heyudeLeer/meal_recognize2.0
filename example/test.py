@@ -85,7 +85,7 @@ if __name__ == '__main__':
 
     nowTime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 现在
     print nowTime
-    model_info = train(restaurant_path=restaurant_path)
+    #model_info = train(restaurant_path=restaurant_path)
     nowTime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 现在
     print nowTime
 

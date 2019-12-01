@@ -266,7 +266,7 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
     #workers = multiprocessing.cpu_count()
     parallel_model.fit_generator(
         generator=data_gen,
-        epochs=12,
+        epochs=14,
         steps_per_epoch=data_info.steps_per_epoch,
         #workers=workers,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
         #validation_data=data_info.val_datas,#data_info.val_generator,
