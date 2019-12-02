@@ -234,15 +234,13 @@ def get_rgb_mark(imgP=None, data_info=None):
             max_index = a.argmax()
             object = imgP[0, i, j, max_index]
             if object > avg_p*2:
-                max_index = a.argmax()
-                object = imgP[0, i, j, max_index]
 
-                if object >= 0.9:
+                if object >= data_info.confidence_threshold: # 0.9
                     rgbImg[i, j, :] = targetColor[max_index]  # 给像素赋值，以示区别
                 elif object >=0.7:
                     rgbImg[i, j, :] = (144,144,144)
                 elif object >=0.5:
-                    rgbImg[i, j, :] = (96,96,64)
+                    rgbImg[i, j, :] = (96,96,96)
                 else:
                     rgbImg[i, j, :] = (48,48,48)
 
@@ -278,50 +276,88 @@ def get_confidence(img=None,th=0):
 def get_dishes_with_confidence(dataInfo=None,segImg=None):
 
     dishes_dictory = {}
-    img = np.uint8(segImg * 256)
+    img = np.uint8(segImg * 255)
 
     for index in range(dataInfo.class_num):
         contours = get_contours(img=img[:,:,index], th=dataInfo.threshold_value)
-
+        name = dataInfo.class_name_dic_t.get(index)
+        dish_num = 0
         for contour in contours:
+            #contour = cv2.convexHull(contour)
             area = cv2.contourArea(contour)
-            if area > dataInfo.min_area:
-                confidence = get_confidence(img=img[:,:,index], th=dataInfo.threshold_value)
-                name = dataInfo.class_name_dic_t.get(index)
-                dishes_dictory[name] = confidence
+            object_rate = area / dataInfo.object_area_avg.get(name)
+
+            if object_rate > 1.75:
+                warnings.warn('dishes maybe linked...')
+
+            if object_rate > 0.25:  # 全局因子，像素超过采样均值0.25即认为是独立的菜
+                integer = np.uint8(object_rate)
+                mod = object_rate - integer
+                if integer == 0:
+                    dish_num += 1
+                else:
+                    dish_num += integer
+                    if mod > 0.75:  # 浮点舍去的若超过采样均值的0.75则认为是另一盘菜，等待用神经网络再次识别，待提升
+                        dish_num += 1
+
+        if dish_num > 0:
+            dishes_dictory[name] = dish_num
 
     return dishes_dictory
 
 
 def get_dishes_with_confidence_debug(dataInfo=None,segImg=None):
 
-    dishes_dictory = {}
-    img = np.uint8(segImg * 256)
+    dishes = []
+    img = np.uint8(segImg * 255)
 
     x, y, z = segImg.shape
     seg_contour = np.zeros((x, y, z), dtype=np.uint8)
 
-    area_fraction = {}
-    areas =  dataInfo.IMG_ROW_OUT * dataInfo.IMG_COL_OUT
-
     for index in range(dataInfo.class_num):
-        contours = get_contours(img=img[:,:,index], th=dataInfo.threshold_value)
+        contours = get_contours(img=img[:, :, index], th=dataInfo.threshold_value)
+        name = dataInfo.class_name_dic_t.get(index)
+        dish_num = 0
+        dish_contour = 0
+
+        area_fraction = []
         canvas = np.zeros((x, y), dtype=np.uint8)
 
         for contour in contours:
+            #contour = cv2.convexHull(contour)
             area = cv2.contourArea(contour)
-
-            # confidence in area,not all img,  Unfinished
-            confidence = get_confidence(img=img[:, :, index], th=dataInfo.threshold_value)
-            name = dataInfo.class_name_dic_t.get(index)
-            dishes_dictory[name] = confidence
-
+            object_rate = area / dataInfo.object_area_avg.get(name)
+            area_fraction.append(object_rate)
             cv2.drawContours(image=canvas, contours=[contour], contourIdx=-1, color=255, thickness=1)
-            area_fraction[name] = area / areas
+            dish_contour += 1
+
+            if object_rate > 1.75:
+                warnings.warn('dishes maybe linked...')
+
+            if object_rate > 0.25:  # 全局因子，像素超过采样均值0.25即认为是独立的菜
+                integer = np.uint8(object_rate)
+                mod = object_rate - integer
+                if integer == 0:
+                    dish_num += 1
+                else:
+                    dish_num += integer
+                    if mod > 0.75:  # 浮点舍去的若超过采样均值的0.75则认为是另一盘菜，等待用神经网络再次识别，待提升
+                        dish_num += 1
+
+            confidence = get_confidence(img=img[:,:,index], th=dataInfo.threshold_value)
+            confidence = round(confidence,5)
 
         seg_contour[:,:,index]  = canvas
 
-    return dishes_dictory,seg_contour,area_fraction
+        if dish_contour > 0:
+            dishes_dictory = {}
+            dishes_dictory['name'] = name
+            dishes_dictory['num'] = dish_num
+            dishes_dictory['confidence'] = confidence
+            dishes_dictory['area_fraction'] = area_fraction
+            dishes.append(dishes_dictory)
+    print dishes
+    return dishes,seg_contour
 
 
 # predict
@@ -470,7 +506,7 @@ def segImgfile_web(data_info= None, url=None,out_path=None, show=False):
 
     if show is True:
         RgbImg = get_rgb_mark(imgP=pred, data_info=data_info)
-        dishes_info, seg_contour,area_fraction = get_dishes_with_confidence_debug(dataInfo=data_info, segImg=pred[0])
+        dishes_info, seg_contour = get_dishes_with_confidence_debug(dataInfo=data_info, segImg=pred[0])
     else:
         dishes_info = get_dishes_with_confidence(dataInfo=data_info, segImg=pred[0])
 
@@ -503,11 +539,9 @@ def segImgfile_web(data_info= None, url=None,out_path=None, show=False):
         ax = plt.subplot(n, m, 3)
         ax.imshow(seg_sum)
         ax.get_xaxis().set_visible(False)
-        print (area_fraction)
 
         for i in range(data_info.class_num):
             ax = plt.subplot(n, m, m*2+1 + i)
-            ax.set_title(str(dishes_info.get(data_info.class_name_dic_t.get(i))))
             ax.get_xaxis().set_visible(False)
             ax.imshow(pred[0,:,:,i])
 
@@ -743,19 +777,19 @@ def getPerPixels(setsPath=None, data_info=None,out_path=None):
 
         dirName = data_info.class_name_dic_t.get(item)  # item is dish index; key is dish name
         if dirName == 'bg':  # 抑制背景，效果还不错，也够简单
-            data_info.object_pixels_avg.append(1.0)
-            data_info.object_area_avg.append(1.0)
+            #data_info.object_pixels_avg.append(1.0)
+            data_info.object_area_avg['bg'] = 1.0
             continue
 
         for _, _, files in os.walk(setsPath + '/' + dirName):
             break
 
         if len(files)==0:
-            data_info.object_pixels_avg.append(250)
-            data_info.object_area_avg.append(250)
+            #data_info.object_pixels_avg.append(250)
+            data_info.object_area_avg[dirName] = 250
             continue
 
-        dot_sum = 0
+        #dot_sum = 0
         area_sum = 0
         for name in files:
             if cmp(file, "category.txt") == 0:
@@ -772,9 +806,9 @@ def getPerPixels(setsPath=None, data_info=None,out_path=None):
             for index in range(data_info.class_num):
                 x_labels.append(str(y[0, index]) + '/' + str(round(y_p[0, index], 3)))
 
-            dot = getPredPixels(imgP=preds, data_info=data_info)
-            dot_sum  += dot
-            print dot
+            #dot = getPredPixels(imgP=preds, data_info=data_info)
+            #dot_sum  += dot
+            #print dot
             label = preds[0,:,:,item]
             areas,_ = cv_tools.getAreaOneDimension(img=label,th=data_info.threshold_value)
             if areas is None:
@@ -798,17 +832,17 @@ def getPerPixels(setsPath=None, data_info=None,out_path=None):
                 area_sum += area
                 print area
 
-        pixel_avg = dot_sum * 1.0 / len(files)
+        #pixel_avg = dot_sum * 1.0 / len(files)
         area_avg = area_sum * 1.0 / len(files)
 
-        pixel_avg = round(pixel_avg,2)
+        #pixel_avg = round(pixel_avg,2)
         area_avg = round(area_avg,2)
 
-        data_info.object_pixels_avg.append(pixel_avg)
-        data_info.object_area_avg.append(area_avg)
+        #data_info.object_pixels_avg.append(pixel_avg)
+        data_info.object_area_avg[dirName] = area_avg
 
-    print 'data_info.object_pixels_avg:'
-    print data_info.object_pixels_avg
+    #print 'data_info.object_pixels_avg:'
+    #print data_info.object_pixels_avg
     print 'data_info.object_area_avg:'
     print data_info.object_area_avg
     return ret

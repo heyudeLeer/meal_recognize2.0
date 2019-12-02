@@ -23,7 +23,12 @@ import data_label
 class DataInfo:
     def __init__(self):
 
+        self.gpu_num = 0
         self.batch_size_base = 2
+        self.confidence_threshold = 0.9
+        self.threshold_value = np.uint8(self.confidence_threshold * 255)
+
+
         self.IMG_ROW = 512 #1024 #960  # 1920, 1080
         self.IMG_COL = 384 #768 #540
 
@@ -80,7 +85,6 @@ class DataInfo:
         self.train_data_extend = 5     # 5x10 = 50
         self.init=True
         self.pixel_level= 0
-        self.gpu_num = 0
         self.batch_size_GPU = 1
 
         self.overlayerBg=True
@@ -103,11 +107,9 @@ class DataInfo:
         self.contour_pixels = 0
         self.err_object=0.0
 
-        self.object_pixels_avg = []
-        self.object_area_avg = []
-        self.threshold_value=0
+        #self.object_pixels_avg = []
+        self.object_area_avg = {}
         self.data_gen=None
-        self.min_area = 0
 
     def para_init(self, pixel_level=0):
 
@@ -149,9 +151,11 @@ class PredictInfo:
         self.model = None
         self.header_model=None
         self.train_img_num = 0
-        self.object_pixels_avg = []
-        self.object_area_avg = []
-        self.threshold_value=0
+        #self.object_pixels_avg = []
+        self.object_area_avg = {}
+
+        self.confidence_threshold = 0.9
+        self.threshold_value = np.uint8(self.confidence_threshold * 255)
 
 
 def saveStruct(*struct_datas):
@@ -163,13 +167,13 @@ def saveStruct(*struct_datas):
         np.save(datas.name + "class_num", datas.class_num)
         np.save(datas.name + "class_name_dic_t", dict(datas.class_name_dic_t))
         np.save(datas.name + "train_img_num", datas.train_img_num)
-        if len(datas.object_pixels_avg)>0:
-            np.save(datas.name + "object_pixels_avg", datas.object_pixels_avg)
+        if len(datas.object_area_avg)>0:
+            #np.save(datas.name + "object_pixels_avg", datas.object_pixels_avg)
             np.save(datas.name + "object_area_avg", datas.object_area_avg)
         print 'object_area_avg'
         print datas.object_area_avg
-        print 'object_pixels_avg'
-        print datas.object_pixels_avg
+        #print 'object_pixels_avg'
+        #print datas.object_pixels_avg
 
         print(datas.name + " info have saved!--------------")
 
@@ -185,30 +189,25 @@ def loadStruct(*struct_datas):
         dict_array = np.load(datas.name + "class_name_dic_t.npy")
         datas.class_name_dic_t = dict_array.item()                ##### key point
         datas.train_img_num = np.load(datas.name + "train_img_num.npy")
-        datas.object_pixels_avg = np.load(datas.name + "object_pixels_avg.npy")
+        #datas.object_pixels_avg = np.load(datas.name + "object_pixels_avg.npy")
         datas.object_area_avg = np.load(datas.name + "object_area_avg.npy")
+        datas.object_area_avg = datas.object_area_avg.item()
 
-        print 'object_area_avg'
+        print 'load object_area_avg'
+        print type(datas.object_area_avg)
         print datas.object_area_avg
-        print 'object_pixels_avg'
-        print datas.object_pixels_avg
+        #print 'object_pixels_avg'
+        #print datas.object_pixels_avg
 
         print(datas.name + "* have loaded...!")
 
 
-def getThredholdValue(data_info=None,y=0):
+def get_thredhold_lower(data_info=None):
+    #auto, multi: 1.2-->2.2
     th = 1.0 / data_info.class_num
-    if y==0: #auto, multi: 1.2-->2.2
-        y = 2.2 - 2 * th  # ( [0.5,1.2] [0.1,2.0],[0.0000001,2.2])
+    y = 2.2 - 2 * th  # ( [0.5,1.2] [0.1,2.0],[0.0000001,2.2])
     print 'threshold avg times is '+str(y)
     th = round(th * y * 255)
-    data_info.threshold_value = np.uint8(th)
-    #print data_info.threshold_value
-
-    data_info.min_area = data_info.IMG_ROW_OUT * data_info.IMG_COL_OUT * 0.02  # 去噪声
-    print 'ignore_size fraction is '+str(0.02)
-
-
 
 
 def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level=3):
@@ -225,7 +224,6 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
     dataInfo.para_init(pixel_level=pixel_level)
     # get class_num/class_name/img_num/data_gen and so on by path_data_set
     data_label.get_data_info(data_set_path=data_set_path, data_info=dataInfo)
-    getThredholdValue(dataInfo)
 
     # save predict info in the data_set_path
     path = data_set_path + '/predictInfo/pixel_level'+ str(pixel_level)+ '/'
@@ -273,7 +271,7 @@ def train_data_set(data_set_path="/path/to/data_set/restaurant_name",pixel_level
     predicInfo.train_img_num = dataInfo.train_img_num
 
     ret = predic.getPerPixels(setsPath=data_set_path + '/train', data_info=dataInfo,out_path=data_set_path)
-    predicInfo.object_pixels_avg = dataInfo.object_pixels_avg
+    #predicInfo.object_pixels_avg = dataInfo.object_pixels_avg
     predicInfo.object_area_avg = dataInfo.object_area_avg
 
     predicInfo.name = path
@@ -296,7 +294,6 @@ def creat_model(data_set_path="/path/to/data_set/restaurant_name", pixel_level=3
     header_model = train.creatXception(predicInfo, upsample=True,train=False)
     #header_model.summary()
     predicInfo.header_model = header_model
-    getThredholdValue(predicInfo)
 
     return predicInfo  # recognition_info
 
@@ -363,16 +360,14 @@ def model_check(data_set_path=None, img_path=None):
             _, pred = PredictInfo.model.predict(img)
 
             RgbImg_0 = predic.get_rgb_mark(imgP=pred_0, data_info=PredictInfo_0)
-            dishes_info_0, canvas_0 ,area_fraction_0= predic.get_dishes_with_confidence_debug(dataInfo=PredictInfo_0, segImg=pred_0[0])
+            dishes_info_0, seg_contour_0 = predic.get_dishes_with_confidence_debug(dataInfo=PredictInfo_0, segImg=pred_0[0])
 
             RgbImg = predic.get_rgb_mark(imgP=pred, data_info=PredictInfo)
-            dishes_info, canvas,area_fraction = predic.get_dishes_with_confidence_debug(dataInfo=PredictInfo, segImg=pred[0])
+            dishes_info, seg_contour = predic.get_dishes_with_confidence_debug(dataInfo=PredictInfo, segImg=pred[0])
 
             print dishes_info_0
+            print
             print dishes_info
-
-            print area_fraction_0
-            print area_fraction
 
             i += 1
             # display source img
@@ -398,12 +393,12 @@ def model_check(data_set_path=None, img_path=None):
             #img = data_label.loadImage(url=plca_path + '/' + shotname+'_pcla.jpg',data_info=PredictInfo)
             ax = plt.subplot(5, n, i+n*3)
             ax.set_title('base')
-            ax.imshow(np.mean(canvas_0,axis=2))
+            ax.imshow(np.mean(seg_contour_0,axis=2))
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
             ax = plt.subplot(5, n, i + n * 4)
-            ax.imshow(np.mean(canvas,axis=2))
+            ax.imshow(np.mean(seg_contour,axis=2))
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 

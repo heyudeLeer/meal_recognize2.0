@@ -1176,22 +1176,17 @@ def label_boost_by_var(label=None,index=0,data_info=None):
 
     # get轮廓
     avg_p = data_info.avg_class_num
-    #avg_th = np.uint8(256*avg_p*0.8)
+    #avg_th = np.uint8(255*avg_p*0.8)
 
     edges =  np.var(label,axis=2)
-    edges = np.uint8(edges * 256)
+    edges = np.uint8(edges * 255)
     var_max = np.max(edges)
     #print var_max
     #x = edges
     #print(type(x), x.shape, x.dtype, np.min(x), np.max(x))
     #print x[26:36,20:30]
 
-    ret, thresh = cv2.threshold(edges, var_max-1, 255, cv2.THRESH_BINARY)
-
-    if opencv_tools.OPEN_CV_VERSION[0] == str(2):
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)  # cv2.RETR_EXTERNAL RETR_LIST #thresh.copy()
-    else:
-        _, contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = predic.get_contours(img=edges, th=var_max-1)
 
     if len(contours) == 0:
         warnings.warn('predict seg no contours,dirty img in train set!')
