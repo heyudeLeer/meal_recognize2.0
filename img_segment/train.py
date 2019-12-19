@@ -53,30 +53,30 @@ def get_gpus_num():
     return num_gpus
 
 
-def creatXception(data_info=None,upsample=False,train=True,name='header_model'):
+def creatXception(data_info=None,Div=32,upsample=False,train=True,name='header_model'):
 
     # build the network with ImageNet weights
     inputShape = (data_info.IMG_ROW, data_info.IMG_COL, 3)
 
     if upsample is True:
-        base_model = xception.Xception(include_top=False, input_shape=inputShape,Div=16)
+        base_model = xception.Xception(include_top=False, input_shape=inputShape,Div=Div)
         if train:
             base_model.load_weights(data_info.base_model_weight_file)
         print 'you chose upsample mode'
 
         x = base_model.output
-
-        x = UpSampling2D((2, 2))(x)
-        x = keras.layers.concatenate([x, base_model.get_layer('block13_sepconv2_act').output])
-        x = SeparableConv2D(3072, (3, 3), use_bias=False, padding='same', name='up_conv1')(x)
-        x = BatchNormalization(name='up_conv1_bn')(x)
-        x = Activation('relu', name='up_conv1_act')(x)
-
-        #x = UpSampling2D((2, 2))(x)
-        #x = keras.layers.concatenate([x, base_model.get_layer('block4_sepconv2_act').output])
-        #x = SeparableConv2D(4096, (3, 3), use_bias=False, padding='same', name='up_conv2')(x)
-        #x = BatchNormalization(name='up_conv2_bn')(x)
-        #x = Activation('relu', name='up_conv2_act')(x)
+        if data_info.pixel_level == 3 or data_info.pixel_level == 2:
+            x = UpSampling2D((2, 2))(x)
+            x = keras.layers.concatenate([x, base_model.get_layer('block13_sepconv2_act').output])
+            x = SeparableConv2D(2048, (3, 3), use_bias=False, padding='same', name='up_conv1')(x)
+            x = BatchNormalization(name='up_conv1_bn')(x)
+            x = Activation('relu', name='up_conv1_act')(x)
+        if data_info.pixel_level == 2:
+            x = UpSampling2D((2, 2))(x)
+            x = keras.layers.concatenate([x, base_model.get_layer('block4_sepconv2_act').output])
+            x = SeparableConv2D(2048, (3, 3), use_bias=False, padding='same', name='up_conv2')(x)
+            x = BatchNormalization(name='up_conv2_bn')(x)
+            x = Activation('relu', name='up_conv2_act')(x)
 
         x = Dropout(0.5)(x)
         x = Conv2D(256, (1, 1), use_bias=False, name='out_conv1')(x)
@@ -86,13 +86,13 @@ def creatXception(data_info=None,upsample=False,train=True,name='header_model'):
 
     else:
 
-        base_model = xception.Xception(weights='imagenet', include_top=False, input_shape=inputShape,Div=8)
+        base_model = xception.Xception(weights='imagenet', include_top=False, input_shape=inputShape,Div=Div)
         data_info.base_model=base_model
         x = base_model.output
 
-        x = Dropout(0.5)(x)
+        #x = Dropout(0.5)(x)
         x = Conv2D(256, (1, 1), use_bias=False, name='out_conv1')(x)
-        x = Dropout(0.5)(x)
+        #x = Dropout(0.5)(x)
 
     header_model = Model(inputs=base_model.input, outputs=x, name=name)
 
@@ -111,15 +111,27 @@ def creatXception(data_info=None,upsample=False,train=True,name='header_model'):
 
 def train_model(data_set_path=None, data_info=None):
 
-    data_info.gpu_num = get_gpus_num()
+    if data_info.gpu_num > 1:
+        data_info.gpu_num = get_gpus_num()
 
-    # one_hot
-    model = creatXception(data_info)
-    weight_file = data_set_path + '/predictInfo/pixel_level'+str(data_info.pixel_level) + '/one_hot_softmax' + '.hdf5'
-    model = one_hot(data_set_path=data_set_path, model=model, weight_file=weight_file, data_info=data_info)
-    #model.load_weights(weight_file)
+    #get object contour
+    # default one_hot
+    pre_train = True
+    if pre_train:
+        model = creatXception(data_info=data_info,Div=16)
+        default_weight_file = data_set_path + '/predictInfo/pixel_level'+str(data_info.pixel_level) + '/one_hot_softmax_Div32' + '.hdf5'
+        default_one_hot(data_set_path=data_set_path, model=model, weight_file=default_weight_file, data_info=data_info)
+        #model.load_weights(default_weight_file)
+        del model
+
+    model = creatXception(data_info=data_info,Div=4)
+    if pre_train:
+        model.load_weights(default_weight_file)
+    one_hot_weight_file = data_set_path + '/predictInfo/pixel_level'+str(data_info.pixel_level) + '/one_hot_softmax' + '.hdf5'
+    model = one_hot(data_set_path=data_set_path, model=model, weight_file=one_hot_weight_file, data_info=data_info)
+    #model.load_weights(one_hot_weight_file)
     if data_info.one_hot_check is True:
-        data_label.one_hot_seg(model=model, data_info=data_info, extend=1, thickness=1e-9)
+        data_label.one_hot_seg(model=model, data_info=data_info, extend=1, thickness=1e-9,img_num=20)
         #return model
 
     # boost one_hot
@@ -148,13 +160,13 @@ def train_model(data_set_path=None, data_info=None):
         data_info.model = model
         data_info.base_model_weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/base_model.hdf5'
         data_info.base_model.save_weights(data_info.base_model_weight_file)
-        model = creatXception(data_info,upsample=True,name='header_unet')
-        weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/robust.hdf5'
+        model = creatXception(data_info=data_info,upsample=True, Div=16, name='header_unet')
+        robust_weight_file = data_set_path + '/predictInfo/pixel_level' + str(data_info.pixel_level) + '/robust.hdf5'
 
         if data_info.boost_self_check is True:
             data_label.boost_seg(model=data_info.model, data_info=data_info, generator=data_info.train_generator,img_num=20)
-        model = u_net_based(model=model,data_set_path=data_set_path, data_info=data_info,weight_file=weight_file)
-        #model.load_weights(weight_file)
+        model = u_net_based(model=model,data_set_path=data_set_path, data_info=data_info,weight_file=robust_weight_file)
+        #model.load_weights(robust_weight_file)
         if data_info.boost_self_check is True:
             data_label.robust_seg(model=model, data_info=data_info,img_num=20)
 
@@ -229,6 +241,41 @@ class my_call_back(keras.callbacks.Callback):
         self.data_info.err_object = 0
 
 
+def default_one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
+
+    opt = keras.optimizers.rmsprop(lr=0.0001, decay=1e-6) #'rmsprop' #
+    loss = {'main_out': 'categorical_crossentropy'}
+
+    try:
+        parallel_model = multi_gpu_model(model, gpus=data_info.gpu_num,cpu_merge=False)
+        print("Training using multiple GPUs..")
+    except ValueError:
+        parallel_model = model
+        print("Training using single GPU or CPU..")
+
+    data_info.batch_size_GPU = data_info.batch_size_base * 3 * data_info.gpu_num
+    data_label.train_generator_init(data_set_path=data_set_path, data_info=data_info)
+    data_gen = data_label.train_generator_clearbg(data_info=data_info)  #data_info.train_generator
+    print ('batch_size_GPU is '+str(data_info.batch_size_GPU))
+
+    parallel_model.compile(
+    optimizer=opt,
+    loss=loss,
+    metrics=[keras.metrics.categorical_accuracy]
+    )
+    parallel_model.summary()
+    #workers = multiprocessing.cpu_count()
+    parallel_model.fit_generator(
+        generator=data_gen,
+        epochs=7,
+        steps_per_epoch=data_info.steps_per_epoch,
+    )
+    del data_gen
+    model.save_weights(weight_file)
+
+    return model
+
+
 def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
 
     opt = keras.optimizers.rmsprop(lr=0.0001, decay=1e-6) #'rmsprop' #
@@ -266,7 +313,7 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
     #workers = multiprocessing.cpu_count()
     parallel_model.fit_generator(
         generator=data_gen,
-        epochs=14,
+        epochs=6,
         steps_per_epoch=data_info.steps_per_epoch,
         #workers=workers,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
         #validation_data=data_info.val_datas,#data_info.val_generator,
@@ -274,13 +321,14 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
         #max_queue_size=32,
     )
     del data_gen
+    #model.save_weights(weight_file)
 
     # fine tuning and val
     ### froze cnn ,and re train
     for layer in model.layers[:]:
         layer.trainable = False
         print 'boost froze' + layer.name
-        if layer.name == 'block6_add':  # block6_add:GPU8
+        if layer.name == 'block12_add':  # block6_add:GPU8
             break
 
     #if data_info.epoch > 0:
@@ -288,7 +336,7 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
     try:
         parallel_model = multi_gpu_model(model, gpus=data_info.gpu_num,cpu_merge=False)
         print("Training using multiple GPUs..")
-        data_info.batch_size_GPU = (data_info.batch_size_base + 2) * data_info.gpu_num
+        data_info.batch_size_GPU = (data_info.batch_size_base + 1) * data_info.gpu_num
     except ValueError:
         parallel_model = model
         print("Training using single GPU or CPU..")
@@ -309,7 +357,7 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
                                  save_best_only=True, save_weights_only=True)
     parallel_model.fit_generator(
         generator=data_gen,
-        epochs=10,
+        epochs=8,
         steps_per_epoch=data_info.steps_per_epoch,
         #workers=workers,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
         validation_data=(data_info.one_hot_x_val,data_info.one_hot_y_val),  # data_info.val_generator,
@@ -492,7 +540,7 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     except ValueError:
         parallel_model = model
         print("Training using single GPU or CPU..")
-    data_info.batch_size_GPU = data_info.batch_size_base * data_info.gpu_num
+    data_info.batch_size_GPU = (data_info.batch_size_base+1) * data_info.gpu_num
     data_label.train_generator_init(data_set_path=data_set_path, data_info=data_info)
     print ('batch_size_GPU is ' + str(data_info.batch_size_GPU))
     boost_generator = data_label.predict_2Dlabel_generator(data_info=data_info)
@@ -506,7 +554,7 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     parallel_model.fit_generator(
         generator=boost_generator,
         steps_per_epoch=data_info.steps_per_epoch,
-        epochs=12,
+        epochs=8,
     )
     del boost_generator
 
@@ -514,17 +562,17 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     for layer in model.layers[:]:
         layer.trainable = False
         print 'boost froze' + layer.name
-        if layer.name =='block11_add': #''block14_sepconv2_act':
+        if layer.name =='block12_add': #''block14_sepconv2_act':
             break
 
     try:
         parallel_model = multi_gpu_model(model, gpus=data_info.gpu_num,cpu_merge=False)
         print("Training using multiple GPUs..")
-        data_info.batch_size_GPU = (data_info.batch_size_base + 6) * data_info.gpu_num
+        data_info.batch_size_GPU = (data_info.batch_size_base + 4) * data_info.gpu_num
     except ValueError:
         parallel_model = model
         print("Training using single GPU or CPU..")
-        data_info.batch_size_GPU = (data_info.batch_size_base + 8)
+        data_info.batch_size_GPU = (data_info.batch_size_base + 4)
 
     data_label.train_generator_init(data_set_path=data_set_path, data_info=data_info)
     print ('batch_size_GPU is ' + str(data_info.batch_size_GPU))
@@ -539,7 +587,7 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     parallel_model.fit_generator(
         generator=boost_generator,
         steps_per_epoch=data_info.steps_per_epoch,
-        epochs=2,
+        epochs=3,
         #validation_data=(data_info.boost_x_val, data_info.boost_label_val),
         #callbacks=[checkpoint, early_stopping]
     )

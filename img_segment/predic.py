@@ -237,9 +237,9 @@ def get_rgb_mark(imgP=None, data_info=None):
 
                 if object >= data_info.confidence_threshold: # 0.9
                     rgbImg[i, j, :] = targetColor[max_index]  # 给像素赋值，以示区别
-                elif object >=0.7:
+                elif object >=0.6:
                     rgbImg[i, j, :] = (144,144,144)
-                elif object >=0.5:
+                elif object >=0.3:
                     rgbImg[i, j, :] = (96,96,96)
                 else:
                     rgbImg[i, j, :] = (48,48,48)

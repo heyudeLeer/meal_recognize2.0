@@ -23,9 +23,9 @@ import data_label
 class DataInfo:
     def __init__(self):
 
-        self.gpu_num = 0
-        self.batch_size_base = 2
-        self.confidence_threshold = 0.9
+        self.gpu_num = 1
+        self.batch_size_base = 1
+        self.confidence_threshold = 0.75
         self.threshold_value = np.uint8(self.confidence_threshold * 255)
 
 
@@ -74,7 +74,7 @@ class DataInfo:
         self.big_loss_len = 0
 
                            #brightness_range, color_range, contrast_range, sharpness_range
-        self.enhance_par = [  (0.75, 1.15),      (0.8, 1.4),  (0.8, 1.4),    (0.8, 1.4)]
+        self.enhance_par = [  (0.7, 1.3),      (0.5, 1.5),  (0.5, 1.5),    (0.5, 1.5)]
         self.enhance_enable = False
 
         self.sess = None
@@ -115,27 +115,20 @@ class DataInfo:
 
         self.pixel_level = pixel_level
 
-        if pixel_level==0:
-            self.IMG_ROW /= 2
-            self.IMG_COL /= 2
-            self.IMG_ROW_OUT = self.IMG_ROW / 32
-            self.IMG_COL_OUT = self.IMG_COL / 32
-            self.enlarge_size = 4
-
-        elif pixel_level==1:
-            self.IMG_ROW_OUT = self.IMG_ROW / 32
-            self.IMG_COL_OUT = self.IMG_COL / 32
-
-        elif pixel_level==2:
-            self.IMG_ROW_OUT = self.IMG_ROW / 16
-            self.IMG_COL_OUT = self.IMG_COL / 16
+        if pixel_level == 2:
+            self.IMG_ROW_OUT = self.IMG_ROW / 4
+            self.IMG_COL_OUT = self.IMG_COL / 4
 
         elif pixel_level==3:
             self.IMG_ROW_OUT = self.IMG_ROW / 8
             self.IMG_COL_OUT = self.IMG_COL / 8
 
+        elif pixel_level==4:
+            self.IMG_ROW_OUT = self.IMG_ROW / 16
+            self.IMG_COL_OUT = self.IMG_COL / 16
+
         else:
-            print "error, pixel_level should in [0,3]"
+            print "error, pixel_level should in [2,3,4]"
             exit(0)
 
 
@@ -154,7 +147,7 @@ class PredictInfo:
         #self.object_pixels_avg = []
         self.object_area_avg = {}
 
-        self.confidence_threshold = 0.9
+        self.confidence_threshold = 0.75
         self.threshold_value = np.uint8(self.confidence_threshold * 255)
 
 
@@ -291,7 +284,8 @@ def creat_model(data_set_path="/path/to/data_set/restaurant_name", pixel_level=3
     predicInfo = PredictInfo()
     predicInfo.name = data_set_path + '/predictInfo/pixel_level'+ str(pixel_level)+'/'
     loadStruct(predicInfo)
-    header_model = train.creatXception(predicInfo, upsample=True,train=False)
+    predicInfo.pixel_level = pixel_level
+    header_model = train.creatXception(predicInfo, upsample=True,Div=16, train=False)
     #header_model.summary()
     predicInfo.header_model = header_model
 
@@ -331,8 +325,8 @@ def model_check(data_set_path=None, img_path=None):
     #PredictInfo_0 = load_trained_model(data_set_path,pixel_level=0)
     #PredictInfo = load_trained_model(data_set_path)
 
-    PredictInfo_0 = creat_model(data_set_path=data_set_path, pixel_level=0)
-    PredictInfo_0 = load_trained_weights(predicInfo=PredictInfo_0, data_set_path=data_set_path, pixel_level=0)
+    PredictInfo_4 = creat_model(data_set_path=data_set_path, pixel_level=2)
+    PredictInfo_4 = load_trained_weights(predicInfo=PredictInfo_4, data_set_path=data_set_path, pixel_level=2)
 
     PredictInfo = creat_model(data_set_path=data_set_path, pixel_level=3)
     PredictInfo = load_trained_weights(predicInfo=PredictInfo, data_set_path=data_set_path, pixel_level=3)
@@ -353,21 +347,17 @@ def model_check(data_set_path=None, img_path=None):
             print
             url = img_path+'/'+dir_name + '/' + file
             print ('predict  '+url)
-            img_0 = data_label.loadImage(url=url,data_info=PredictInfo_0)
+            img_4 = data_label.loadImage(url=url,data_info=PredictInfo_4)
             img = data_label.loadImage(url=url,data_info=PredictInfo)
 
-            _, pred_0 = PredictInfo_0.model.predict(img_0)
+            _, pred_4 = PredictInfo_4.model.predict(img_4)
             _, pred = PredictInfo.model.predict(img)
 
-            RgbImg_0 = predic.get_rgb_mark(imgP=pred_0, data_info=PredictInfo_0)
-            dishes_info_0, seg_contour_0 = predic.get_dishes_with_confidence_debug(dataInfo=PredictInfo_0, segImg=pred_0[0])
+            RgbImg_4 = predic.get_rgb_mark(imgP=pred_4, data_info=PredictInfo_4)
+            dishes_info_4, seg_contour_4 = predic.get_dishes_with_confidence_debug(dataInfo=PredictInfo_4, segImg=pred_4[0])
 
             RgbImg = predic.get_rgb_mark(imgP=pred, data_info=PredictInfo)
             dishes_info, seg_contour = predic.get_dishes_with_confidence_debug(dataInfo=PredictInfo, segImg=pred[0])
-
-            print dishes_info_0
-            print
-            print dishes_info
 
             i += 1
             # display source img
@@ -380,7 +370,7 @@ def model_check(data_set_path=None, img_path=None):
             ax = plt.subplot(5, n, i+n)
             ax.set_title('base')
             # display result
-            ax.imshow(RgbImg_0)
+            ax.imshow(RgbImg_4)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
@@ -393,7 +383,7 @@ def model_check(data_set_path=None, img_path=None):
             #img = data_label.loadImage(url=plca_path + '/' + shotname+'_pcla.jpg',data_info=PredictInfo)
             ax = plt.subplot(5, n, i+n*3)
             ax.set_title('base')
-            ax.imshow(np.mean(seg_contour_0,axis=2))
+            ax.imshow(np.mean(seg_contour_4,axis=2))
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 

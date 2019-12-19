@@ -6,11 +6,11 @@ from img_segment import pixclass
 from img_segment import predic
 from img_segment import data_label
 import keras.backend.tensorflow_backend as KTF
-KTF.set_session(data_label.get_session(0.75))
+#KTF.set_session(data_label.get_session(0.75))
 
 def train(restaurant_path=None):
 
-    model_info = pixclass.train_data_set(data_set_path=restaurant_path,pixel_level=3)
+    model_info = pixclass.train_data_set(data_set_path=restaurant_path,pixel_level=2)
     return model_info
 
 
@@ -85,7 +85,7 @@ if __name__ == '__main__':
 
     nowTime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 现在
     print nowTime
-    #model_info = train(restaurant_path=restaurant_path)
+    model_info = train(restaurant_path=restaurant_path)
     nowTime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 现在
     print nowTime
 
