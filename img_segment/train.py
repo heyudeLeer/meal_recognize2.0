@@ -59,22 +59,42 @@ def creatXception(data_info=None,Div=32,upsample=False,train=True,name='header_m
     inputShape = (data_info.IMG_ROW, data_info.IMG_COL, 3)
 
     if upsample is True:
-        base_model = xception.Xception(include_top=False, input_shape=inputShape,Div=Div)
+        base_model,res_out = xception.Xception(include_top=False, input_shape=inputShape,Div=Div)
         if train:
             base_model.load_weights(data_info.base_model_weight_file)
         print 'you chose upsample mode'
 
+        residual = keras.layers.Conv2D(1024, (1, 1), strides=(2, 2), padding='same', use_bias=False)(res_out)
+        residual = keras.layers.BatchNormalization()(residual)
+
         x = base_model.output
-        if data_info.pixel_level == 3 or data_info.pixel_level == 2:
+        x = keras.layers.SeparableConv2D(1024, (3, 3), padding='same', use_bias=False, name='block15_sepconv1')(x)
+        x = keras.layers.BatchNormalization(name='block15_sepconv1_bn')(x)
+        x = keras.layers.MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='block15_pool')(x)
+        x = keras.layers.add([x, residual], name='block15_add')
+        x = keras.layers.Activation('relu', name='block15_sepconv1_act')(x)
+
+        x = keras.layers.SeparableConv2D(1024, (3, 3), padding='same', use_bias=False, name='block15_sepconv2')(x)
+        x = keras.layers.BatchNormalization(name='block15_sepconv2_bn')(x)
+        x = keras.layers.Activation('relu', name='block15_sepconv2_act')(x)
+
+        x = UpSampling2D((2, 2))(x)
+
+        x = keras.layers.concatenate([x, base_model.output])
+        x = SeparableConv2D(1024, (3, 3), use_bias=False, padding='same', name='up_conv0')(x)
+        x = BatchNormalization(name='up_conv0_bn')(x)
+        x = Activation('relu', name='up_conv0_act')(x)
+
+        if data_info.pixel_level == 3 or data_info.pixel_level == 2 :
             x = UpSampling2D((2, 2))(x)
             x = keras.layers.concatenate([x, base_model.get_layer('block13_sepconv2_act').output])
-            x = SeparableConv2D(2048, (3, 3), use_bias=False, padding='same', name='up_conv1')(x)
+            x = SeparableConv2D(1024, (3, 3), use_bias=False, padding='same', name='up_conv1')(x)
             x = BatchNormalization(name='up_conv1_bn')(x)
             x = Activation('relu', name='up_conv1_act')(x)
-        if data_info.pixel_level == 2:
+        if data_info.pixel_level == 2 :
             x = UpSampling2D((2, 2))(x)
             x = keras.layers.concatenate([x, base_model.get_layer('block4_sepconv2_act').output])
-            x = SeparableConv2D(2048, (3, 3), use_bias=False, padding='same', name='up_conv2')(x)
+            x = SeparableConv2D(1024, (3, 3), use_bias=False, padding='same', name='up_conv2')(x)
             x = BatchNormalization(name='up_conv2_bn')(x)
             x = Activation('relu', name='up_conv2_act')(x)
 
@@ -86,7 +106,7 @@ def creatXception(data_info=None,Div=32,upsample=False,train=True,name='header_m
 
     else:
 
-        base_model = xception.Xception(weights='imagenet', include_top=False, input_shape=inputShape,Div=Div)
+        base_model, _ = xception.Xception(weights='imagenet', include_top=False, input_shape=inputShape,Div=Div)
         data_info.base_model=base_model
         x = base_model.output
 
@@ -557,6 +577,7 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
         epochs=8,
     )
     del boost_generator
+    model.save_weights(weight_file)
 
     # fine tuning and val
     for layer in model.layers[:]:

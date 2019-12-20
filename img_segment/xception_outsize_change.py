@@ -238,6 +238,7 @@ def Xception(include_top=True,
 
     x = layers.SeparableConv2D(1536, (3, 3), padding='same', use_bias=False, name='block14_sepconv1')(x)
     x = layers.BatchNormalization(name='block14_sepconv1_bn')(x)
+    res_out = x
     x = layers.Activation('relu', name='block14_sepconv1_act')(x)
 
     x = layers.SeparableConv2D(2048, (3, 3), padding='same', use_bias=False, name='block14_sepconv2')(x)
@@ -285,7 +286,7 @@ def Xception(include_top=True,
 
     if old_data_format:
         backend.set_image_data_format(old_data_format)
-    return model
+    return model, res_out
 
 
 def preprocess_input(x, **kwargs):

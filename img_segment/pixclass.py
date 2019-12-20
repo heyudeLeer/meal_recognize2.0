@@ -322,14 +322,13 @@ def model_check(data_set_path=None, img_path=None):
     :param segPath: images path
     :return: print and plt show result
     '''
-    #PredictInfo_0 = load_trained_model(data_set_path,pixel_level=0)
-    #PredictInfo = load_trained_model(data_set_path)
 
-    PredictInfo_4 = creat_model(data_set_path=data_set_path, pixel_level=2)
-    PredictInfo_4 = load_trained_weights(predicInfo=PredictInfo_4, data_set_path=data_set_path, pixel_level=2)
 
-    PredictInfo = creat_model(data_set_path=data_set_path, pixel_level=3)
-    PredictInfo = load_trained_weights(predicInfo=PredictInfo, data_set_path=data_set_path, pixel_level=3)
+    predictInfo_3 = creat_model(data_set_path=data_set_path, pixel_level=3)
+    predictInfo_3 = load_trained_weights(predicInfo=predictInfo_3, data_set_path=data_set_path, pixel_level=3)
+
+    predictInfo_2 = creat_model(data_set_path=data_set_path, pixel_level=2)
+    predictInfo_2 = load_trained_weights(predicInfo=predictInfo_2, data_set_path=data_set_path, pixel_level=2)
 
     for _, dirs, _ in os.walk(img_path):
         break
@@ -347,48 +346,48 @@ def model_check(data_set_path=None, img_path=None):
             print
             url = img_path+'/'+dir_name + '/' + file
             print ('predict  '+url)
-            img_4 = data_label.loadImage(url=url,data_info=PredictInfo_4)
-            img = data_label.loadImage(url=url,data_info=PredictInfo)
+            img_3 = data_label.loadImage(url=url,data_info=predictInfo_3)
+            img_2 = data_label.loadImage(url=url,data_info=predictInfo_2)
 
-            _, pred_4 = PredictInfo_4.model.predict(img_4)
-            _, pred = PredictInfo.model.predict(img)
+            _, pred_3 = predictInfo_3.model.predict(img_3)
+            _, pred_2 = predictInfo_2.model.predict(img_2)
 
-            RgbImg_4 = predic.get_rgb_mark(imgP=pred_4, data_info=PredictInfo_4)
-            dishes_info_4, seg_contour_4 = predic.get_dishes_with_confidence_debug(dataInfo=PredictInfo_4, segImg=pred_4[0])
+            RgbImg_3 = predic.get_rgb_mark(imgP=pred_3, data_info=predictInfo_3)
+            dishes_info_3, seg_contour_3 = predic.get_dishes_with_confidence_debug(dataInfo=predictInfo_3, segImg=pred_3[0])
 
-            RgbImg = predic.get_rgb_mark(imgP=pred, data_info=PredictInfo)
-            dishes_info, seg_contour = predic.get_dishes_with_confidence_debug(dataInfo=PredictInfo, segImg=pred[0])
+            RgbImg2 = predic.get_rgb_mark(imgP=pred_2, data_info=predictInfo_2)
+            dishes_info_2, seg_contour_2 = predic.get_dishes_with_confidence_debug(dataInfo=predictInfo_2, segImg=pred_2[0])
 
             i += 1
             # display source img
             ax = plt.subplot(5, n, i)
             ax.set_title(file[-8:-1])
-            ax.imshow(img[0]/255.)
+            ax.imshow(img_2[0]/255.)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
             ax = plt.subplot(5, n, i+n)
             ax.set_title('base')
             # display result
-            ax.imshow(RgbImg_4)
+            ax.imshow(RgbImg_3)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
             ax = plt.subplot(5, n, i + n*2)
             # display result
-            ax.imshow(RgbImg)
+            ax.imshow(RgbImg2)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
-            #img = data_label.loadImage(url=plca_path + '/' + shotname+'_pcla.jpg',data_info=PredictInfo)
+            #img = data_label.loadImage(url=plca_path + '/' + shotname+'_pcla.jpg',data_info=predictInfo)
             ax = plt.subplot(5, n, i+n*3)
             ax.set_title('base')
-            ax.imshow(np.mean(seg_contour_4,axis=2))
+            #ax.imshow(np.mean(seg_contour_4,axis=2))
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
             ax = plt.subplot(5, n, i + n * 4)
-            ax.imshow(np.mean(seg_contour,axis=2))
+            #ax.imshow(np.mean(seg_contour,axis=2))
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
