@@ -59,11 +59,12 @@ def creatXception(data_info=None,Div=32,upsample=False,train=True,name='header_m
     inputShape = (data_info.IMG_ROW, data_info.IMG_COL, 3)
 
     if upsample is True:
-        base_model,res_out = xception.Xception(include_top=False, input_shape=inputShape,Div=Div)
+        base_model = xception.Xception(input_shape=inputShape,Div=Div)
         if train:
             base_model.load_weights(data_info.base_model_weight_file)
         print 'you chose upsample mode'
 
+        res_out = base_model.get_layer('block14_sepconv1_bn').output
         residual = keras.layers.Conv2D(1024, (1, 1), strides=(2, 2), padding='same', use_bias=False)(res_out)
         residual = keras.layers.BatchNormalization()(residual)
 
@@ -79,7 +80,6 @@ def creatXception(data_info=None,Div=32,upsample=False,train=True,name='header_m
         x = keras.layers.Activation('relu', name='block15_sepconv2_act')(x)
 
         x = UpSampling2D((2, 2))(x)
-
         x = keras.layers.concatenate([x, base_model.output])
         x = SeparableConv2D(1024, (3, 3), use_bias=False, padding='same', name='up_conv0')(x)
         x = BatchNormalization(name='up_conv0_bn')(x)
@@ -106,7 +106,7 @@ def creatXception(data_info=None,Div=32,upsample=False,train=True,name='header_m
 
     else:
 
-        base_model, _ = xception.Xception(weights='imagenet', include_top=False, input_shape=inputShape,Div=Div)
+        base_model = xception.Xception(weights='imagenet', input_shape=inputShape,Div=Div)
         data_info.base_model=base_model
         x = base_model.output
 
@@ -187,6 +187,7 @@ def train_model(data_set_path=None, data_info=None):
             data_label.boost_seg(model=data_info.model, data_info=data_info, generator=data_info.train_generator,img_num=20)
         model = u_net_based(model=model,data_set_path=data_set_path, data_info=data_info,weight_file=robust_weight_file)
         #model.load_weights(robust_weight_file)
+
         if data_info.boost_self_check is True:
             data_label.robust_seg(model=model, data_info=data_info,img_num=20)
 
@@ -577,13 +578,13 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
         epochs=8,
     )
     del boost_generator
-    model.save_weights(weight_file)
+    model.save_weights('temp.h5')
 
     # fine tuning and val
     for layer in model.layers[:]:
         layer.trainable = False
         print 'boost froze' + layer.name
-        if layer.name =='block12_add': #''block14_sepconv2_act':
+        if layer.name =='block13_add': #''block14_sepconv2_act': block12_add
             break
 
     try:
@@ -593,7 +594,7 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     except ValueError:
         parallel_model = model
         print("Training using single GPU or CPU..")
-        data_info.batch_size_GPU = (data_info.batch_size_base + 4)
+        data_info.batch_size_GPU = (data_info.batch_size_base + 8)
 
     data_label.train_generator_init(data_set_path=data_set_path, data_info=data_info)
     print ('batch_size_GPU is ' + str(data_info.batch_size_GPU))

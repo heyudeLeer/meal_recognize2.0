@@ -43,8 +43,8 @@ TF_WEIGHTS_PATH_NO_TOP = (
     'xception_weights_tf_dim_ordering_tf_kernels_notop.h5')
 
 
-def Xception(include_top=True,
-             weights='imagenet',
+def Xception(include_top=False,
+             weights=None,
              input_tensor=None,
              input_shape=None,
              pooling=None,
@@ -238,7 +238,6 @@ def Xception(include_top=True,
 
     x = layers.SeparableConv2D(1536, (3, 3), padding='same', use_bias=False, name='block14_sepconv1')(x)
     x = layers.BatchNormalization(name='block14_sepconv1_bn')(x)
-    res_out = x
     x = layers.Activation('relu', name='block14_sepconv1_act')(x)
 
     x = layers.SeparableConv2D(2048, (3, 3), padding='same', use_bias=False, name='block14_sepconv2')(x)
@@ -286,7 +285,7 @@ def Xception(include_top=True,
 
     if old_data_format:
         backend.set_image_data_format(old_data_format)
-    return model, res_out
+    return model
 
 
 def preprocess_input(x, **kwargs):

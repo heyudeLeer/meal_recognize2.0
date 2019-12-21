@@ -308,6 +308,22 @@ def load_trained_weights(predicInfo=None,data_set_path="/path/to/data_set/restau
     return predicInfo  # recognition_info
 
 
+def load_trained_weights_standard(predicInfo=None,data_set_path="/path/to/data_set/restaurant_name", pixel_level=3):
+
+    x = predicInfo.header_model.output
+    x = keras.layers.Conv2D(predicInfo.class_num, (1, 1), use_bias=False, name='conv_out')(x)
+
+    seg_output = Activation('softmax', name='seg_out')(x)
+    x = GlobalAveragePooling2D()(x)
+    main_output = Activation('softmax', name='main_out')(x)
+    predicInfo.model = Model(inputs=predicInfo.header_model.input, outputs=[main_output, seg_output], name='acting_model')
+
+    weight_file = data_set_path + '/predictInfo/pixel_level' + str(pixel_level) + '/robust_standard.hdf5'
+    predicInfo.model.load_weights(weight_file)
+
+    return predicInfo  # recognition_info
+
+
 def predict_img(image_url='path/to/image',predict_info=None, check=False,data_set_path="/path/to/data_set/restaurant_name"):
 
     dic = predic.segImgfile_web(data_info=predict_info, url=image_url, out_path=data_set_path,show=check)
@@ -323,12 +339,18 @@ def model_check(data_set_path=None, img_path=None):
     :return: print and plt show result
     '''
 
+    #predictInfo_3s = creat_model(data_set_path=data_set_path, pixel_level=3)
+    #predictInfo_3s = load_trained_weights_standard(predicInfo=predictInfo_3s, data_set_path=data_set_path, pixel_level=3)
+
+    predictInfo_2s = creat_model(data_set_path=data_set_path, pixel_level=2)
+    predictInfo_2s = load_trained_weights_standard(predicInfo=predictInfo_2s, data_set_path=data_set_path, pixel_level=2)
 
     predictInfo_3 = creat_model(data_set_path=data_set_path, pixel_level=3)
     predictInfo_3 = load_trained_weights(predicInfo=predictInfo_3, data_set_path=data_set_path, pixel_level=3)
 
     predictInfo_2 = creat_model(data_set_path=data_set_path, pixel_level=2)
     predictInfo_2 = load_trained_weights(predicInfo=predictInfo_2, data_set_path=data_set_path, pixel_level=2)
+
 
     for _, dirs, _ in os.walk(img_path):
         break
@@ -346,48 +368,54 @@ def model_check(data_set_path=None, img_path=None):
             print
             url = img_path+'/'+dir_name + '/' + file
             print ('predict  '+url)
-            img_3 = data_label.loadImage(url=url,data_info=predictInfo_3)
-            img_2 = data_label.loadImage(url=url,data_info=predictInfo_2)
+            img = data_label.loadImage(url=url,data_info=predictInfo_2)
 
-            _, pred_3 = predictInfo_3.model.predict(img_3)
-            _, pred_2 = predictInfo_2.model.predict(img_2)
+            _, pred_3 = predictInfo_3.model.predict(img)
+            #_, pred_3s = predictInfo_3s.model.predict(img)
+            _, pred_2 = predictInfo_2.model.predict(img)
+            _, pred_2s = predictInfo_2s.model.predict(img)
+            #print(type(pred_2s), pred_2s.dtype, pred_2s.shape,np.min(pred_2s), np.max(pred_2s))
 
             RgbImg_3 = predic.get_rgb_mark(imgP=pred_3, data_info=predictInfo_3)
-            dishes_info_3, seg_contour_3 = predic.get_dishes_with_confidence_debug(dataInfo=predictInfo_3, segImg=pred_3[0])
+            #RgbImg_3s = predic.get_rgb_mark(imgP=pred_3s, data_info=predictInfo_3s)
+            #dishes_info_3, seg_contour_3 = predic.get_dishes_with_confidence_debug(dataInfo=predictInfo_3, segImg=pred_3[0])
 
-            RgbImg2 = predic.get_rgb_mark(imgP=pred_2, data_info=predictInfo_2)
+            RgbImg_2 = predic.get_rgb_mark(imgP=pred_2, data_info=predictInfo_2)
+            RgbImg_2s = predic.get_rgb_mark(imgP=pred_2s, data_info=predictInfo_2s)
             dishes_info_2, seg_contour_2 = predic.get_dishes_with_confidence_debug(dataInfo=predictInfo_2, segImg=pred_2[0])
 
             i += 1
             # display source img
             ax = plt.subplot(5, n, i)
             ax.set_title(file[-8:-1])
-            ax.imshow(img_2[0]/255.)
+            ax.imshow(img[0]/255.)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
             ax = plt.subplot(5, n, i+n)
-            ax.set_title('base')
+            ax.set_title('base3s')
             # display result
-            ax.imshow(RgbImg_3)
+            #ax.imshow(RgbImg_3s)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
             ax = plt.subplot(5, n, i + n*2)
+            ax.set_title('base2s')
             # display result
-            ax.imshow(RgbImg2)
+            ax.imshow(RgbImg_2s)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
             #img = data_label.loadImage(url=plca_path + '/' + shotname+'_pcla.jpg',data_info=predictInfo)
             ax = plt.subplot(5, n, i+n*3)
-            ax.set_title('base')
             #ax.imshow(np.mean(seg_contour_4,axis=2))
+            ax.imshow(RgbImg_3)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
             ax = plt.subplot(5, n, i + n * 4)
             #ax.imshow(np.mean(seg_contour,axis=2))
+            ax.imshow(RgbImg_2)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
