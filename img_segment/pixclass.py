@@ -81,7 +81,7 @@ class DataInfo:
         self.graph = None
         self.cpus = 1
         self.enhance_index = 0
-        self.val_data_extend = 15       # 5x20 = 100
+        self.val_data_extend = 20       # 5x20 = 100
         self.train_data_extend = 5     # 5x10 = 50
         self.init=True
         self.pixel_level= 0
@@ -339,8 +339,8 @@ def model_check(data_set_path=None, img_path=None):
     :return: print and plt show result
     '''
 
-    #predictInfo_3s = creat_model(data_set_path=data_set_path, pixel_level=3)
-    #predictInfo_3s = load_trained_weights_standard(predicInfo=predictInfo_3s, data_set_path=data_set_path, pixel_level=3)
+    predictInfo_3s = creat_model(data_set_path=data_set_path, pixel_level=3)
+    predictInfo_3s = load_trained_weights_standard(predicInfo=predictInfo_3s, data_set_path=data_set_path, pixel_level=3)
 
     predictInfo_2s = creat_model(data_set_path=data_set_path, pixel_level=2)
     predictInfo_2s = load_trained_weights_standard(predicInfo=predictInfo_2s, data_set_path=data_set_path, pixel_level=2)
@@ -371,13 +371,13 @@ def model_check(data_set_path=None, img_path=None):
             img = data_label.loadImage(url=url,data_info=predictInfo_2)
 
             _, pred_3 = predictInfo_3.model.predict(img)
-            #_, pred_3s = predictInfo_3s.model.predict(img)
+            _, pred_3s = predictInfo_3s.model.predict(img)
             _, pred_2 = predictInfo_2.model.predict(img)
             _, pred_2s = predictInfo_2s.model.predict(img)
             #print(type(pred_2s), pred_2s.dtype, pred_2s.shape,np.min(pred_2s), np.max(pred_2s))
 
             RgbImg_3 = predic.get_rgb_mark(imgP=pred_3, data_info=predictInfo_3)
-            #RgbImg_3s = predic.get_rgb_mark(imgP=pred_3s, data_info=predictInfo_3s)
+            RgbImg_3s = predic.get_rgb_mark(imgP=pred_3s, data_info=predictInfo_3s)
             #dishes_info_3, seg_contour_3 = predic.get_dishes_with_confidence_debug(dataInfo=predictInfo_3, segImg=pred_3[0])
 
             RgbImg_2 = predic.get_rgb_mark(imgP=pred_2, data_info=predictInfo_2)
@@ -395,7 +395,7 @@ def model_check(data_set_path=None, img_path=None):
             ax = plt.subplot(5, n, i+n)
             ax.set_title('base3s')
             # display result
-            #ax.imshow(RgbImg_3s)
+            ax.imshow(RgbImg_3s)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 

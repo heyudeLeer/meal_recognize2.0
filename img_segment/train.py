@@ -334,7 +334,7 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
     #workers = multiprocessing.cpu_count()
     parallel_model.fit_generator(
         generator=data_gen,
-        epochs=6,
+        epochs=4,
         steps_per_epoch=data_info.steps_per_epoch,
         #workers=workers,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
         #validation_data=data_info.val_datas,#data_info.val_generator,
@@ -342,7 +342,7 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
         #max_queue_size=32,
     )
     del data_gen
-    #model.save_weights(weight_file)
+    model.save_weights('temp0.h5')
 
     # fine tuning and val
     ### froze cnn ,and re train
@@ -373,19 +373,27 @@ def one_hot(data_set_path=None,model=None, weight_file=None, data_info=None):
         metrics=[keras.metrics.categorical_accuracy]
     )
     parallel_model.summary()
-    early_stopping = EarlyStopping(monitor='val_loss', patience=2, min_delta=3e-5)  # val_loss
+    early_stopping = EarlyStopping(monitor='val_loss', patience=1, min_delta=3e-5)  # val_loss
     checkpoint = ModelCheckpoint(weight_file, monitor='val_loss', verbose=2,
                                  save_best_only=True, save_weights_only=True)
     parallel_model.fit_generator(
         generator=data_gen,
-        epochs=8,
+        epochs=6,
         steps_per_epoch=data_info.steps_per_epoch,
         #workers=workers,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
+        #validation_data=(data_info.one_hot_x_val,data_info.one_hot_y_val),  # data_info.val_generator,
+        #callbacks=[checkpoint, early_stopping],
+    )
+    parallel_model.fit_generator(
+        generator=data_gen,
+        epochs=10,
+        steps_per_epoch=data_info.steps_per_epoch,
+        # workers=workers,  # GPU资源是瓶颈，CPU多核没用，反倒需要打开pickle_safe，使CPU等一下GPU，避免溢出
         validation_data=(data_info.one_hot_x_val,data_info.one_hot_y_val),  # data_info.val_generator,
         callbacks=[checkpoint, early_stopping],
     )
     del data_gen
-    model.save_weights(weight_file)
+    model.load_weights(weight_file)
 
     return model
 
@@ -578,7 +586,7 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
         epochs=8,
     )
     del boost_generator
-    model.save_weights('temp.h5')
+    model.save_weights('temp1.h5')
 
     # fine tuning and val
     for layer in model.layers[:]:
@@ -609,7 +617,7 @@ def u_net_based(data_set_path=None, data_info=None,weight_file=None,model=None):
     parallel_model.fit_generator(
         generator=boost_generator,
         steps_per_epoch=data_info.steps_per_epoch,
-        epochs=3,
+        epochs=6,
         #validation_data=(data_info.boost_x_val, data_info.boost_label_val),
         #callbacks=[checkpoint, early_stopping]
     )

@@ -10,7 +10,7 @@ import keras.backend.tensorflow_backend as KTF
 
 def train(restaurant_path=None):
 
-    model_info = pixclass.train_data_set(data_set_path=restaurant_path,pixel_level=3)
+    model_info = pixclass.train_data_set(data_set_path=restaurant_path,pixel_level=2)
     return model_info
 
 
